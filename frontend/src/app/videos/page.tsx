@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { Video, PlusCircle, MapPin, Filter } from "lucide-react";
+import { Video, PlusCircle, MapPin, Filter, Layers } from "lucide-react"; // Added Layers
 
 import Sidebar from "@/components/Sidebar";
 import MobileNav from "@/components/MobileNav";
@@ -43,7 +43,6 @@ export default function VideoPage() {
       .select("region")
       .eq("media_type", "video")
       .order("region");
-
     if (data) {
       const unique = Array.from(
         new Set(data.map((item) => item.region).filter(Boolean))
@@ -60,7 +59,6 @@ export default function VideoPage() {
       router.push("/login");
       return;
     }
-
     setLoading(true);
 
     let query = supabase
@@ -68,13 +66,10 @@ export default function VideoPage() {
       .select("*")
       .eq("media_type", "video")
       .order("title");
-
-    if (selectedRegion !== "All") {
-      query = query.eq("region", selectedRegion);
-    }
+    if (selectedRegion !== "All") query = query.eq("region", selectedRegion);
 
     const { data, error } = await query;
-    if (data) setMediaItems(data);
+    if (!error) setMediaItems(data || []);
     setLoading(false);
   };
 
@@ -84,9 +79,7 @@ export default function VideoPage() {
       .from("media_items")
       .delete()
       .eq("id", deleteId);
-    if (error) {
-      setToast({ msg: "Error deleting item", type: "error" });
-    } else {
+    if (!error) {
       setMediaItems(mediaItems.filter((item) => item.id !== deleteId));
       fetchRegions();
       setToast({ msg: "Video deleted", type: "success" });
@@ -107,7 +100,6 @@ export default function VideoPage() {
         media={currentMedia}
         onClose={() => setCurrentMedia(null)}
       />
-
       <UploadModal
         isOpen={isUploadOpen}
         onClose={() => setIsUploadOpen(false)}
@@ -118,7 +110,6 @@ export default function VideoPage() {
         }}
         defaultType="video"
       />
-
       <Modal
         isOpen={!!editingItem}
         onClose={() => setEditingItem(null)}
@@ -137,7 +128,6 @@ export default function VideoPage() {
           />
         )}
       </Modal>
-
       <ConfirmationModal
         isOpen={!!deleteId}
         onClose={() => setDeleteId(null)}
@@ -151,7 +141,17 @@ export default function VideoPage() {
       <Sidebar onUpload={() => setIsUploadOpen(true)} />
 
       <main className="flex-1 p-4 md:p-8 overflow-y-auto h-screen">
-        {/* HEADER: Stacked Mobile Layout */}
+        {/* MOBILE BRAND HEADER (RESTORED) */}
+        <div className="md:hidden flex items-center gap-2 mb-6">
+          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/30">
+            <Layers size={18} className="text-white" />
+          </div>
+          <h1 className="text-xl font-bold tracking-tight text-white">
+            Sarape
+          </h1>
+        </div>
+
+        {/* HEADER */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -161,7 +161,6 @@ export default function VideoPage() {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-            {/* 1. REGION FILTER (Full Width) */}
             <div className="relative w-full sm:w-64">
               <div className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none">
                 <MapPin size={16} />
@@ -182,8 +181,6 @@ export default function VideoPage() {
                 <Filter size={12} />
               </div>
             </div>
-
-            {/* 2. UPLOAD BUTTON (Full Width) */}
             <button
               onClick={() => setIsUploadOpen(true)}
               className="hidden sm:flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-indigo-500/20 transition-all"
@@ -193,16 +190,13 @@ export default function VideoPage() {
           </div>
         </div>
 
+        {/* LIST */}
         {loading ? (
-          <div className="text-zinc-500 animate-pulse">Loading library...</div>
+          <div className="text-zinc-500 animate-pulse">Loading...</div>
         ) : mediaItems.length === 0 ? (
           <div className="h-64 border border-dashed border-zinc-800 rounded-2xl flex flex-col items-center justify-center text-zinc-500 gap-4">
             <Video size={48} className="opacity-20" />
-            <p>
-              {selectedRegion !== "All"
-                ? `No videos found in "${selectedRegion}"`
-                : "No videos found."}
-            </p>
+            <p>No videos found.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

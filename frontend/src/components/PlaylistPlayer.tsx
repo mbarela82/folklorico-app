@@ -43,16 +43,20 @@ export default function PlaylistPlayer({
   const audioRef = useRef<HTMLAudioElement>(null);
   const currentTrack = playlist[currentIndex];
 
-  // Handle Playback Change
+  // 1. Handle Track Changes (Auto-play when index changes)
   useEffect(() => {
     if (!currentTrack) return;
+
+    // Reset progress
+    setProgress(0);
+
+    // Only auto-play if we are supposed to be playing
     if (isPlaying) {
       audioRef.current?.play().catch((e) => console.log("Play error", e));
     }
-    setProgress(0);
   }, [currentIndex]);
 
-  // Handle Volume Change
+  // 2. Handle Volume Changes
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.volume = isMuted ? 0 : volume;
@@ -275,8 +279,22 @@ export default function PlaylistPlayer({
               <button
                 key={`${item.id}-${index}`}
                 onClick={() => {
-                  setCurrentIndex(index);
-                  setIsPlaying(true);
+                  // FIX: Handle clicking the same track
+                  if (currentIndex === index) {
+                    // If same track, manually ensure it plays if paused
+                    if (!isPlaying) {
+                      audioRef.current?.play();
+                      setIsPlaying(true);
+                    } else {
+                      // Optional: pause if clicked again?
+                      // Standard playlist behavior usually just resumes or restarts.
+                      // Let's stick to Resume logic.
+                    }
+                  } else {
+                    // Different track: Switch index (useEffect handles play)
+                    setCurrentIndex(index);
+                    setIsPlaying(true);
+                  }
                 }}
                 className={`w-full flex items-center gap-4 p-3 rounded-lg text-left transition-all group ${
                   isActive

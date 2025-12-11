@@ -89,7 +89,12 @@ export default function Dashboard() {
       {/* --- MAIN CONTENT --- */}
       <main className="flex-1 p-4 md:p-8 overflow-y-auto h-screen">
         <div className="md:hidden flex justify-between items-center mb-6">
-          <h1 className="text-lg font-bold text-indigo-400">Troupe App</h1>
+          <h1 className="text-lg font-bold text-white flex items-center gap-2">
+            <div className="w-6 h-6 bg-indigo-600 rounded flex items-center justify-center">
+              <span className="font-bold text-xs text-white">S</span>
+            </div>
+            Sarape
+          </h1>
           <button onClick={handleLogout} className="text-zinc-400">
             <LogOut size={20} />
           </button>

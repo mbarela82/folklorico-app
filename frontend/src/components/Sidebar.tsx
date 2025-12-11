@@ -10,6 +10,7 @@ import {
   Video,
   PlusCircle,
   LogOut,
+  Layers, // Logo Icon
 } from "lucide-react";
 
 interface SidebarProps {
@@ -26,10 +27,14 @@ export default function Sidebar({ onUpload }: SidebarProps) {
   };
 
   return (
-    <aside className="hidden md:flex flex-col w-64 border-r border-zinc-800 p-6 bg-zinc-900/50 sticky top-0 h-screen text-zinc-100">
-      <h1 className="text-xl font-bold mb-8 text-indigo-400 flex items-center gap-2">
-        <Music size={24} /> Troupe App
-      </h1>
+    <aside className="hidden md:flex flex-col w-64 border-r border-zinc-800 p-6 bg-zinc-950 sticky top-0 h-screen text-zinc-100">
+      {/* BRAND HEADER */}
+      <div className="flex items-center gap-3 mb-10 px-2">
+        <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/30">
+          <Layers size={18} className="text-white" />
+        </div>
+        <h1 className="text-xl font-bold tracking-tight text-white">Sarape</h1>
+      </div>
 
       <nav className="flex-1 space-y-2">
         <Link href="/dashboard" className="block">
@@ -48,11 +53,10 @@ export default function Sidebar({ onUpload }: SidebarProps) {
           />
         </Link>
 
-        <div className="pt-4 pb-2 text-xs font-bold text-zinc-600 uppercase tracking-wider">
+        <div className="pt-6 pb-3 text-[10px] font-bold text-zinc-600 uppercase tracking-widest pl-2">
           Library
         </div>
 
-        {/* NEW LINKS */}
         <Link href="/music" className="block">
           <NavItem
             icon={<Music size={20} />}
@@ -70,7 +74,7 @@ export default function Sidebar({ onUpload }: SidebarProps) {
         </Link>
 
         {onUpload && (
-          <button onClick={onUpload} className="w-full mt-4">
+          <button onClick={onUpload} className="w-full mt-6">
             <NavItem icon={<PlusCircle size={20} />} label="Upload Media" />
           </button>
         )}
@@ -78,9 +82,9 @@ export default function Sidebar({ onUpload }: SidebarProps) {
 
       <button
         onClick={handleLogout}
-        className="flex items-center gap-3 text-zinc-400 hover:text-white transition-colors mt-auto p-2 hover:bg-zinc-800 rounded-lg"
+        className="flex items-center gap-3 text-zinc-500 hover:text-red-400 transition-colors mt-auto p-3 hover:bg-zinc-900 rounded-xl text-sm font-medium"
       >
-        <LogOut size={20} /> <span>Sign Out</span>
+        <LogOut size={18} /> <span>Sign Out</span>
       </button>
     </aside>
   );
@@ -97,14 +101,14 @@ function NavItem({
 }) {
   return (
     <div
-      className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all border ${
         active
-          ? "bg-indigo-600/10 text-indigo-400 font-medium border border-indigo-500/20"
-          : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
+          ? "bg-zinc-900 border-zinc-800 text-white font-medium shadow-sm"
+          : "border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900/50"
       }`}
     >
       {icon}
-      <span>{label}</span>
+      <span className="text-sm">{label}</span>
     </div>
   );
 }
