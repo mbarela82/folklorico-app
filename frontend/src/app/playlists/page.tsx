@@ -27,16 +27,17 @@ import ConfirmationModal from "@/components/ConfirmationModal";
 import PlaylistPlayer from "@/components/PlaylistPlayer";
 import Sidebar from "@/components/Sidebar";
 import MobileNav from "@/components/MobileNav";
-import UploadModal from "@/components/UploadModal"; // <--- 1. Import UploadModal
+import UploadModal from "@/components/UploadModal";
+import KebabMenu from "@/components/ui/KebabMenu";
 
 export default function PlaylistsPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [playlists, setPlaylists] = useState<any[]>([]);
 
-  // State for Actions
+  // --- STATE FOR MODALS & ACTIONS ---
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [isUploadOpen, setIsUploadOpen] = useState(false); // <--- 2. Add Upload State
+  const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [editingPlaylist, setEditingPlaylist] = useState<any>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [toast, setToast] = useState<{
@@ -44,7 +45,7 @@ export default function PlaylistsPage() {
     type: "success" | "error";
   } | null>(null);
 
-  // State for Player
+  // --- STATE FOR PLAYER ---
   const [playerPlaylist, setPlayerPlaylist] = useState<any[]>([]);
   const [currentMedia, setCurrentMedia] = useState<any>(null);
 
@@ -72,9 +73,10 @@ export default function PlaylistsPage() {
     setLoading(false);
   };
 
-  // --- ACTIONS ---
+  // --- HANDLERS ---
 
   const handlePlayPlaylist = async (playlistId: string) => {
+    // Fetch all items in this playlist
     const { data } = await supabase
       .from("playlist_items")
       .select("*, media_items(*)")
@@ -82,6 +84,7 @@ export default function PlaylistsPage() {
       .order("order_index");
 
     if (data && data.length > 0) {
+      // Map the joined data to just the media objects
       const tracks = data.map((item: any) => item.media_items);
       setPlayerPlaylist(tracks);
       setCurrentMedia(tracks[0]);
@@ -110,16 +113,17 @@ export default function PlaylistsPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col md:flex-row pb-20 md:pb-0">
-      {/* 3. Render Upload Modal */}
+      {/* 1. UPLOAD MODAL (Triggered by Sidebar/MobileNav) */}
       <UploadModal
         isOpen={isUploadOpen}
         onClose={() => setIsUploadOpen(false)}
         onUploadSuccess={() =>
           setToast({ msg: "Upload Successful!", type: "success" })
         }
+        defaultType="audio" // Defaulting to audio context since we are in playlists
       />
 
-      {/* Player */}
+      {/* 2. PLAYER OVERLAY */}
       {currentMedia && playerPlaylist.length > 0 && (
         <PlaylistPlayer
           playlist={playerPlaylist}
@@ -131,7 +135,7 @@ export default function PlaylistsPage() {
         />
       )}
 
-      {/* Toasts & Modals */}
+      {/* 3. TOASTS */}
       {toast && (
         <Toast
           message={toast.msg}
@@ -140,6 +144,7 @@ export default function PlaylistsPage() {
         />
       )}
 
+      {/* 4. CONFIRM DELETE */}
       <ConfirmationModal
         isOpen={!!deleteId}
         onClose={() => setDeleteId(null)}
@@ -150,6 +155,7 @@ export default function PlaylistsPage() {
         confirmText="Yes, Delete"
       />
 
+      {/* 5. CREATE / EDIT FORM MODAL */}
       <Modal
         isOpen={isCreateOpen || !!editingPlaylist}
         onClose={() => {
@@ -177,15 +183,13 @@ export default function PlaylistsPage() {
       </Modal>
 
       {/* --- SIDEBAR --- */}
-      {/* 4. Pass onUpload to Sidebar to reveal the button */}
       <Sidebar onUpload={() => setIsUploadOpen(true)} />
 
       {/* --- MAIN CONTENT --- */}
       <main className="flex-1 p-4 md:p-8 overflow-y-auto h-screen">
-        {/* Mobile Header */}
+        {/* Mobile Header (Visual only) */}
         <div className="md:hidden flex justify-between items-center mb-6">
           <h1 className="text-lg font-bold text-indigo-400">Troupe App</h1>
-          {/* We remove logout here since it's in the sidebar/profile area usually, or add it back if needed */}
         </div>
 
         {/* Page Header */}
@@ -226,31 +230,31 @@ export default function PlaylistsPage() {
                 className="bg-zinc-900/50 border border-zinc-800 p-5 rounded-xl hover:border-indigo-500/50 hover:bg-zinc-900 transition-all group relative cursor-pointer"
               >
                 <div className="flex justify-between items-start mb-4">
+                  {/* Icon */}
                   <div className="p-3 bg-zinc-950 rounded-lg text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white transition-colors shadow-inner">
                     <Play size={24} className="ml-1" />
                   </div>
 
-                  <div className="flex gap-1">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditingPlaylist(playlist);
-                      }}
-                      className="p-2 text-zinc-600 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors"
-                      title="Edit"
-                    >
-                      <Edit2 size={18} />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteId(playlist.id);
-                      }}
-                      className="p-2 text-zinc-600 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
-                      title="Delete"
-                    >
-                      <Trash2 size={18} />
-                    </button>
+                  {/* KEBAB MENU (Always Visible for Mobile) */}
+                  <div
+                    className="relative z-10"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <KebabMenu
+                      items={[
+                        {
+                          label: "Edit Playlist",
+                          icon: <Edit2 size={16} />,
+                          onClick: () => setEditingPlaylist(playlist),
+                        },
+                        {
+                          label: "Delete",
+                          icon: <Trash2 size={16} />,
+                          onClick: () => setDeleteId(playlist.id),
+                          variant: "danger",
+                        },
+                      ]}
+                    />
                   </div>
                 </div>
 
@@ -272,7 +276,6 @@ export default function PlaylistsPage() {
       </main>
 
       {/* --- MOBILE NAV --- */}
-      {/* 5. Pass onUpload to MobileNav as well */}
       <MobileNav onUpload={() => setIsUploadOpen(true)} />
     </div>
   );

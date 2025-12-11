@@ -1,7 +1,16 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { X, Play, Pause, SkipBack, SkipForward, Music } from "lucide-react";
+import {
+  X,
+  Play,
+  Pause,
+  SkipBack,
+  SkipForward,
+  Music,
+  Volume2,
+  VolumeX,
+} from "lucide-react";
 
 interface MediaItem {
   id: string;
@@ -23,13 +32,18 @@ export default function PlaylistPlayer({
   onClose,
 }: PlaylistPlayerProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
-  const [isPlaying, setIsPlaying] = useState(false); // Start paused
+  const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
+
+  // Volume State
+  const [volume, setVolume] = useState(1);
+  const [isMuted, setIsMuted] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const currentTrack = playlist[currentIndex];
 
+  // Handle Playback Change
   useEffect(() => {
     if (!currentTrack) return;
     if (isPlaying) {
@@ -37,6 +51,13 @@ export default function PlaylistPlayer({
     }
     setProgress(0);
   }, [currentIndex]);
+
+  // Handle Volume Change
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = isMuted ? 0 : volume;
+    }
+  }, [volume, isMuted]);
 
   const togglePlay = () => {
     if (!audioRef.current) return;
@@ -148,7 +169,8 @@ export default function PlaylistPlayer({
 
         {/* Bottom Controls */}
         <div className="bg-zinc-900 border-t border-zinc-800 p-6 pb-10 md:pb-6">
-          <div className="flex items-center gap-3 mb-4 text-xs font-mono text-zinc-400">
+          {/* Progress Bar */}
+          <div className="flex items-center gap-3 mb-6 text-xs font-mono text-zinc-400">
             <span>{formatTime(progress)}</span>
             <input
               type="range"
@@ -161,42 +183,75 @@ export default function PlaylistPlayer({
             <span>{formatTime(duration)}</span>
           </div>
 
-          <div className="flex items-center justify-center gap-10">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handlePrev();
-              }}
-              disabled={currentIndex === 0}
-              className="text-zinc-400 hover:text-white disabled:opacity-30 transition-colors"
-            >
-              <SkipBack size={32} />
-            </button>
+          {/* Playback & Volume Row */}
+          <div className="relative flex items-center justify-center">
+            {/* Center Controls */}
+            <div className="flex items-center gap-8 md:gap-10">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handlePrev();
+                }}
+                disabled={currentIndex === 0}
+                className="text-zinc-400 hover:text-white disabled:opacity-30 transition-colors"
+              >
+                <SkipBack size={32} />
+              </button>
 
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                togglePlay();
-              }}
-              className="w-16 h-16 bg-indigo-600 hover:bg-indigo-500 rounded-full flex items-center justify-center text-white shadow-lg shadow-indigo-500/30 transform hover:scale-105 transition-all"
-            >
-              {isPlaying ? (
-                <Pause size={32} fill="currentColor" />
-              ) : (
-                <Play size={32} fill="currentColor" className="ml-1" />
-              )}
-            </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  togglePlay();
+                }}
+                className="w-16 h-16 bg-indigo-600 hover:bg-indigo-500 rounded-full flex items-center justify-center text-white shadow-lg shadow-indigo-500/30 transform hover:scale-105 transition-all"
+              >
+                {isPlaying ? (
+                  <Pause size={32} fill="currentColor" />
+                ) : (
+                  <Play size={32} fill="currentColor" className="ml-1" />
+                )}
+              </button>
 
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleNext();
-              }}
-              disabled={currentIndex === playlist.length - 1}
-              className="text-zinc-400 hover:text-white disabled:opacity-30 transition-colors"
-            >
-              <SkipForward size={32} />
-            </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleNext();
+                }}
+                disabled={currentIndex === playlist.length - 1}
+                className="text-zinc-400 hover:text-white disabled:opacity-30 transition-colors"
+              >
+                <SkipForward size={32} />
+              </button>
+            </div>
+
+            {/* Right Side: Volume Control */}
+            <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-2 group/vol">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsMuted(!isMuted);
+                }}
+                className="text-zinc-500 hover:text-white transition-colors"
+              >
+                {isMuted || volume === 0 ? (
+                  <VolumeX size={20} />
+                ) : (
+                  <Volume2 size={20} />
+                )}
+              </button>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.1"
+                value={isMuted ? 0 : volume}
+                onChange={(e) => {
+                  setVolume(parseFloat(e.target.value));
+                  setIsMuted(false);
+                }}
+                className="w-20 h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-indigo-500 hidden sm:block"
+              />
+            </div>
           </div>
         </div>
       </div>

@@ -1,11 +1,15 @@
-import { Play, Music, Video } from "lucide-react";
+"use client";
 
-// This defines what data a Card needs to work
+import { Music, Video, Edit2, Trash2 } from "lucide-react";
+import KebabMenu, { MenuItem } from "@/components/ui/KebabMenu";
+
 interface MediaCardProps {
   title: string;
   region: string;
   type: "audio" | "video";
   onClick: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }
 
 export default function MediaCard({
@@ -13,33 +17,58 @@ export default function MediaCard({
   region,
   type,
   onClick,
+  onEdit,
+  onDelete,
 }: MediaCardProps) {
+  const menuItems: MenuItem[] = [];
+
+  if (onEdit) {
+    menuItems.push({
+      label: "Edit Details",
+      icon: <Edit2 size={16} />,
+      onClick: onEdit,
+    });
+  }
+
+  if (onDelete) {
+    menuItems.push({
+      label: "Delete",
+      icon: <Trash2 size={16} />,
+      onClick: onDelete,
+      variant: "danger",
+    });
+  }
+
   return (
     <div
       onClick={onClick}
-      className="group bg-zinc-900 border border-zinc-800 rounded-xl p-4 hover:bg-zinc-800 transition-all cursor-pointer flex items-center gap-4 relative overflow-hidden"
+      className="group relative bg-zinc-900/50 border border-zinc-800 p-4 rounded-xl hover:bg-zinc-900 hover:border-indigo-500/50 transition-all cursor-pointer flex items-center gap-4"
     >
-      {/* 1. The Icon Box (Left side) */}
       <div
-        className={`w-12 h-12 rounded-lg flex items-center justify-center shrink-0 ${
-          type === "audio"
-            ? "bg-indigo-900/30 text-indigo-400"
-            : "bg-emerald-900/30 text-emerald-400"
+        className={`p-4 rounded-full flex-shrink-0 transition-colors ${
+          type === "video"
+            ? "bg-blue-500/10 text-blue-400 group-hover:bg-blue-500 group-hover:text-white"
+            : "bg-indigo-500/10 text-indigo-400 group-hover:bg-indigo-500 group-hover:text-white"
         }`}
       >
-        {type === "audio" ? <Music size={24} /> : <Video size={24} />}
+        {type === "video" ? <Video size={24} /> : <Music size={24} />}
       </div>
 
-      {/* 2. Text Info */}
       <div className="flex-1 min-w-0">
-        <h3 className="font-medium text-zinc-100 truncate">{title}</h3>
-        <p className="text-sm text-zinc-400 truncate">{region}</p>
+        <h3 className="font-bold text-zinc-200 truncate group-hover:text-white transition-colors">
+          {title}
+        </h3>
+        <p className="text-xs text-zinc-500 uppercase tracking-wider font-medium mt-0.5">
+          {region}
+        </p>
       </div>
 
-      {/* 3. Play Button (Only shows when hovering) */}
-      <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-indigo-600 rounded-full p-2 text-white shadow-lg">
-        <Play size={16} fill="currentColor" />
-      </div>
+      {/* ACTION MENU: Always Visible now */}
+      {menuItems.length > 0 && (
+        <div className="relative z-10">
+          <KebabMenu items={menuItems} />
+        </div>
+      )}
     </div>
   );
 }

@@ -16,14 +16,14 @@ interface UploadModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUploadSuccess: () => void;
-  defaultType?: "audio" | "video"; // <--- NEW PROP
+  defaultType?: "audio" | "video";
 }
 
 export default function UploadModal({
   isOpen,
   onClose,
   onUploadSuccess,
-  defaultType = "audio", // Default to audio if not specified
+  defaultType = "audio",
 }: UploadModalProps) {
   const [activeTab, setActiveTab] = useState<"audio" | "video">(defaultType);
   const [file, setFile] = useState<File | null>(null);
@@ -37,10 +37,9 @@ export default function UploadModal({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // RESET STATE WHEN MODAL OPENS
   useEffect(() => {
     if (isOpen) {
-      setActiveTab(defaultType); // <--- Sync tab with current page context
+      setActiveTab(defaultType);
       setFile(null);
       setTitle("");
       setRegion("");
@@ -70,10 +69,10 @@ export default function UploadModal({
       } = await supabase.auth.getUser();
       if (!user) throw new Error("User not found");
 
-      // 1. Upload File to Supabase Storage
+      // 1. Upload File
       const fileExt = file.name.split(".").pop();
       const fileName = `${Date.now()}-${Math.random()}.${fileExt}`;
-      const bucket = activeTab === "video" ? "videos" : "audio"; // Ensure these buckets exist!
+      const bucket = "media";
 
       const { error: uploadError } = await supabase.storage
         .from(bucket)
@@ -81,14 +80,13 @@ export default function UploadModal({
 
       if (uploadError) throw uploadError;
 
-      // 2. Get Public URL
       const { data: publicUrlData } = supabase.storage
         .from(bucket)
         .getPublicUrl(fileName);
 
-      // 3. Save Metadata to DB
+      // 2. Save Metadata
       const { error: dbError } = await supabase.from("media_items").insert({
-        user_id: user.id,
+        uploader_id: user.id,
         title,
         region,
         media_type: activeTab,
@@ -115,7 +113,6 @@ export default function UploadModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden scale-100 animate-in zoom-in-95 duration-200">
-        {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-zinc-800">
           <h2 className="text-lg font-bold text-white">Upload Media</h2>
           <button
@@ -126,7 +123,6 @@ export default function UploadModal({
           </button>
         </div>
 
-        {/* Tabs */}
         <div className="flex border-b border-zinc-800">
           <button
             onClick={() => setActiveTab("audio")}
@@ -150,9 +146,7 @@ export default function UploadModal({
           </button>
         </div>
 
-        {/* Form */}
         <div className="p-6 space-y-4">
-          {/* File Input */}
           <div
             onClick={() => fileInputRef.current?.click()}
             className="border-2 border-dashed border-zinc-700 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer hover:border-indigo-500 hover:bg-zinc-800/50 transition-all group"
@@ -201,7 +195,7 @@ export default function UploadModal({
             </div>
             <div>
               <label className="text-xs font-bold text-zinc-500 uppercase ml-1">
-                Region / Tag
+                Region
               </label>
               <input
                 type="text"
@@ -213,7 +207,6 @@ export default function UploadModal({
             </div>
           </div>
 
-          {/* Status Message */}
           {message && (
             <div
               className={`p-3 rounded-lg flex items-center gap-2 text-sm ${
