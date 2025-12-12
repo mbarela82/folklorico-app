@@ -8,6 +8,7 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
+  className?: string; // <--- NEW PROP
 }
 
 export default function Modal({
@@ -15,8 +16,8 @@ export default function Modal({
   onClose,
   title,
   children,
+  className = "max-w-lg", // Default width
 }: ModalProps) {
-  // Prevent scrolling the background when modal is open
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
@@ -31,11 +32,11 @@ export default function Modal({
   if (!isOpen) return null;
 
   return (
-    // 1. The Backdrop (Dark overlay)
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-      {/* 2. The Modal Box */}
-      <div className="w-full max-w-lg bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
-        {/* Header */}
+      {/* Dynamic className allows us to make it wider */}
+      <div
+        className={`w-full ${className} bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl flex flex-col max-h-[90vh]`}
+      >
         <div className="flex items-center justify-between p-4 border-b border-zinc-800">
           <h2 className="text-lg font-bold text-white">{title}</h2>
           <button
@@ -45,9 +46,7 @@ export default function Modal({
             <X size={20} />
           </button>
         </div>
-
-        {/* Content (Scrollable if too long) */}
-        <div className="p-6 overflow-y-auto">{children}</div>
+        <div className="p-0 overflow-y-auto">{children}</div>
       </div>
     </div>
   );

@@ -16,22 +16,17 @@ import {
   FlipHorizontal,
   Gauge,
   Repeat,
-  Clock,
+  Globe, // New
+  Lock, // New
 } from "lucide-react";
 import WaveSurfer from "wavesurfer.js";
 
-interface MediaItem {
-  id: string;
-  title: string;
-  region: string;
-  media_type: "audio" | "video";
-  file_path: string;
-}
+import { Database } from "@/types/supabase";
+type MediaItem = Database["public"]["Tables"]["media_items"]["Row"];
+type BookmarkItem = Database["public"]["Tables"]["bookmarks"]["Row"];
 
 interface PracticeStudioProps {
   media: MediaItem | null;
-  playlist?: MediaItem[];
-  onSelectMedia?: (item: MediaItem) => void;
   onClose: () => void;
 }
 
@@ -54,6 +49,10 @@ export default function PracticeStudio({
     active: false,
   });
 
+  // User Context (For RBAC)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string>("dancer");
+
   // Player State
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -65,8 +64,8 @@ export default function PracticeStudio({
 
   // UI Loop State
   const [activeLoopId, setActiveLoopId] = useState<string | null>(null);
-  const [loopA, setLoopA] = useState<number | null>(null); // State for rendering visuals
-  const [loopB, setLoopB] = useState<number | null>(null); // State for rendering visuals
+  const [loopA, setLoopA] = useState<number | null>(null);
+  const [loopB, setLoopB] = useState<number | null>(null);
   const [loopDuration, setLoopDuration] = useState(5);
 
   // Volume State
@@ -74,13 +73,31 @@ export default function PracticeStudio({
   const [isMuted, setIsMuted] = useState(false);
 
   // Bookmark State
-  const [bookmarks, setBookmarks] = useState<any[]>([]);
+  const [bookmarks, setBookmarks] = useState<BookmarkItem[]>([]);
   const [isAddingMark, setIsAddingMark] = useState(false);
   const [newMarkNote, setNewMarkNote] = useState("");
+  const [isNewMarkPublic, setIsNewMarkPublic] = useState(false); // New Toggle
 
-  // 1. Initialize Player
+  // 1. Initialize Player & User
   useEffect(() => {
     if (!media) return;
+
+    // Fetch User Role
+    const initUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        setCurrentUserId(user.id);
+        const { data } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .single();
+        if (data) setUserRole(data.role);
+      }
+    };
+    initUser();
 
     // Reset All States
     setIsPlaying(false);
@@ -155,6 +172,7 @@ export default function PracticeStudio({
       .select("*")
       .eq("media_id", media.id)
       .order("start_time", { ascending: true });
+
     if (data) setBookmarks(data);
   };
 
@@ -187,14 +205,13 @@ export default function PracticeStudio({
     setActiveLoopId(null);
   };
 
-  const toggleBookmarkLoop = (mark: any) => {
+  const toggleBookmarkLoop = (mark: BookmarkItem) => {
     if (activeLoopId === mark.id) {
       clearLoop();
       return;
     }
     const start = mark.start_time;
     const end = mark.start_time + loopDuration;
-
     loopRef.current = { a: start, b: end, active: true };
 
     // Update State for Visuals
@@ -218,7 +235,6 @@ export default function PracticeStudio({
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const time = parseFloat(e.target.value);
-
     const { a, b, active } = loopRef.current;
     if (active && a !== null && b !== null) {
       if (time < a - 1 || time > b + 1) {
@@ -287,11 +303,13 @@ export default function PracticeStudio({
       user_id: user.id,
       start_time: currentTime,
       note: newMarkNote || `Mark at ${formatTime(currentTime)}`,
+      is_public: isNewMarkPublic, // Save the public status
     });
 
     if (!error) {
       setIsAddingMark(false);
       setNewMarkNote("");
+      setIsNewMarkPublic(false);
       fetchBookmarks();
     }
   };
@@ -334,7 +352,7 @@ export default function PracticeStudio({
             {media.title}
           </h2>
           <p className="text-xs text-zinc-500 uppercase tracking-widest">
-            {media.region}
+            {media.region || "Unknown Region"}
           </p>
         </div>
         <button
@@ -368,6 +386,7 @@ export default function PracticeStudio({
                       ? "bg-indigo-600 text-white"
                       : "bg-black/50 text-white"
                   }`}
+                  title="Mirror Video (for learning)"
                 >
                   <FlipHorizontal size={20} />
                 </button>
@@ -385,11 +404,7 @@ export default function PracticeStudio({
           {media.media_type === "audio" && (
             <div className="w-full px-4 md:px-12">
               <div className="relative w-full">
-                {" "}
-                {/* Relative wrapper for positioning */}
-                {/* The WaveSurfer Container */}
                 <div ref={containerRef} className="w-full" />
-                {/* Loop Overlay (Visual Box) */}
                 {activeLoopId && loopA !== null && (
                   <div
                     className="absolute top-0 bottom-0 bg-indigo-500/20 pointer-events-none z-10 border-l border-r border-indigo-500/50"
@@ -423,18 +438,13 @@ export default function PracticeStudio({
               </button>
             </div>
 
-            {/* ROW 2: SCRUBBER (Video Only) */}
+            {/* ROW 2: SCRUBBER (Video Only - Audio uses WaveSurfer) */}
             {media.media_type === "video" && (
-              <div className="mb-4 relative">
-                <input
-                  type="range"
-                  min="0"
-                  max={duration}
-                  value={currentTime}
-                  onChange={handleSeek}
-                  className="w-full h-2 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-indigo-500 relative z-10"
-                />
-                {/* Loop Bar Visual for Video */}
+              <div className="mb-4 relative h-2 group/scrubber">
+                {/* 1. Track Background */}
+                <div className="absolute inset-0 bg-zinc-700 rounded-lg z-0" />
+
+                {/* 2. Loop Box (Visual) */}
                 {activeLoopId && loopA !== null && (
                   <div
                     className="absolute top-0 bottom-0 bg-indigo-500/30 pointer-events-none z-0"
@@ -446,6 +456,29 @@ export default function PracticeStudio({
                     }}
                   />
                 )}
+
+                {/* 3. Bookmark Dots */}
+                <div className="absolute top-0 w-full h-full z-10 pointer-events-none">
+                  {bookmarks.map((b) => (
+                    <div
+                      key={b.id}
+                      className={`absolute top-0 h-full w-1 rounded-full ${
+                        b.is_public ? "bg-amber-400 z-20" : "bg-white z-10"
+                      }`}
+                      style={{ left: `${(b.start_time / duration) * 100}%` }}
+                    />
+                  ))}
+                </div>
+
+                {/* 4. The Interactive Input (Transparent Background) */}
+                <input
+                  type="range"
+                  min="0"
+                  max={duration}
+                  value={currentTime}
+                  onChange={handleSeek}
+                  className="absolute inset-0 w-full h-full appearance-none bg-transparent cursor-pointer z-20 focus:outline-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-lg"
+                />
               </div>
             )}
 
@@ -505,7 +538,6 @@ export default function PracticeStudio({
                     <Volume2 size={20} />
                   )}
                 </button>
-                {/* Horizontal Slider only (hidden on mobile) */}
                 <input
                   type="range"
                   min="0"
@@ -534,6 +566,28 @@ export default function PracticeStudio({
                   onChange={(e) => setNewMarkNote(e.target.value)}
                   className="w-full bg-zinc-900 border border-zinc-800 rounded p-2 text-sm text-white mb-2 focus:border-indigo-500 outline-none"
                 />
+
+                {/* ROLE BASED PUBLIC TOGGLE */}
+                {(userRole === "teacher" || userRole === "admin") && (
+                  <div
+                    onClick={() => setIsNewMarkPublic(!isNewMarkPublic)}
+                    className="flex items-center gap-2 mb-3 cursor-pointer text-xs font-bold text-zinc-400 hover:text-white"
+                  >
+                    <div
+                      className={`w-4 h-4 border rounded flex items-center justify-center ${
+                        isNewMarkPublic
+                          ? "bg-amber-500 border-amber-500"
+                          : "border-zinc-600"
+                      }`}
+                    >
+                      {isNewMarkPublic && (
+                        <div className="w-2 h-2 bg-black rounded-sm" />
+                      )}
+                    </div>
+                    <span>Make Public (Teacher Note)</span>
+                  </div>
+                )}
+
                 <div className="flex gap-2">
                   <button
                     onClick={handleSaveBookmark}
@@ -566,7 +620,7 @@ export default function PracticeStudio({
                     <X size={14} />
                   </button>
                 </div>
-                {/* Duration Buttons */}
+                {/* Duration Buttons: Reverted to 5, 10, 15, 20 */}
                 <div className="flex gap-2">
                   {[5, 10, 15, 20].map((sec) => (
                     <button
@@ -595,15 +649,23 @@ export default function PracticeStudio({
             <div className="space-y-2">
               {bookmarks.map((mark) => {
                 const isLooping = activeLoopId === mark.id;
+                const isOwner = mark.user_id === currentUserId;
+                const isPublic = mark.is_public;
+
                 return (
                   <div
                     key={mark.id}
-                    className={`w-full flex items-center justify-between p-3 border rounded-lg transition-all group ${
+                    className={`w-full flex items-center justify-between p-3 border rounded-lg transition-all group relative overflow-hidden ${
                       isLooping
                         ? "bg-indigo-900/10 border-indigo-500/50"
                         : "bg-zinc-950 border-zinc-800 hover:bg-zinc-800"
                     }`}
                   >
+                    {/* Public Strip Indicator */}
+                    {isPublic && (
+                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-500" />
+                    )}
+
                     <div
                       className="flex items-center gap-3 flex-1 cursor-pointer min-w-0"
                       onClick={() => jumpTo(mark.start_time)}
@@ -612,18 +674,26 @@ export default function PracticeStudio({
                         className={`font-mono text-xs font-bold px-2 py-1 rounded shrink-0 ${
                           isLooping
                             ? "bg-indigo-500 text-white"
-                            : "bg-indigo-400/10 text-indigo-400"
+                            : "bg-zinc-800 text-zinc-400"
                         }`}
                       >
                         {formatTime(mark.start_time)}
                       </div>
-                      <span
-                        className={`text-sm font-medium truncate ${
-                          isLooping ? "text-indigo-300" : "text-zinc-300"
-                        }`}
-                      >
-                        {mark.note}
-                      </span>
+
+                      <div className="flex flex-col min-w-0">
+                        <span
+                          className={`text-sm font-medium truncate ${
+                            isPublic ? "text-amber-100" : "text-zinc-300"
+                          }`}
+                        >
+                          {mark.note}
+                        </span>
+                        {isPublic && (
+                          <span className="text-[10px] text-amber-500 font-bold uppercase tracking-wider flex items-center gap-1">
+                            <Globe size={10} /> Teacher Note
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <div className="flex items-center gap-1 pl-2">
@@ -642,12 +712,22 @@ export default function PracticeStudio({
                         <Repeat size={16} />
                       </button>
 
-                      <button
-                        onClick={(e) => handleDeleteBookmark(mark.id, e)}
-                        className="p-2 text-zinc-600 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      {/* Delete Button: ONLY if I own it */}
+                      {isOwner && (
+                        <button
+                          onClick={(e) => handleDeleteBookmark(mark.id, e)}
+                          className="p-2 text-zinc-600 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
+
+                      {/* Read-Only Lock for students viewing teacher notes */}
+                      {!isOwner && isPublic && (
+                        <div className="p-2 text-zinc-700">
+                          <Lock size={16} />
+                        </div>
+                      )}
                     </div>
                   </div>
                 );

@@ -12,13 +12,9 @@ import {
   VolumeX,
 } from "lucide-react";
 
-interface MediaItem {
-  id: string;
-  title: string;
-  region: string;
-  media_type: "audio" | "video";
-  file_path: string;
-}
+// --- CHANGED: Use Global Types ---
+import { Database } from "@/types/supabase";
+type MediaItem = Database["public"]["Tables"]["media_items"]["Row"];
 
 interface PlaylistPlayerProps {
   playlist: MediaItem[];
@@ -156,13 +152,20 @@ export default function PlaylistPlayer({
               <div className="absolute inset-0 bg-indigo-500/20 rounded-full animate-ping"></div>
             )}
 
-            <div className="w-48 h-48 md:w-64 md:h-64 bg-zinc-900 rounded-full border-4 border-zinc-800 flex items-center justify-center shadow-2xl relative z-10">
-              <Music
-                size={80}
-                className={`text-indigo-500 transition-all duration-700 ${
-                  isPlaying ? "scale-110" : "scale-100 opacity-50"
-                }`}
-              />
+            <div className="w-48 h-48 md:w-64 md:h-64 bg-zinc-900 rounded-full border-4 border-zinc-800 flex items-center justify-center shadow-2xl relative z-10 overflow-hidden">
+              {currentTrack.thumbnail_url ? (
+                <img
+                  src={currentTrack.thumbnail_url}
+                  className="w-full h-full object-cover opacity-80"
+                />
+              ) : (
+                <Music
+                  size={80}
+                  className={`text-indigo-500 transition-all duration-700 ${
+                    isPlaying ? "scale-110" : "scale-100 opacity-50"
+                  }`}
+                />
+              )}
             </div>
           </div>
 
@@ -279,19 +282,12 @@ export default function PlaylistPlayer({
               <button
                 key={`${item.id}-${index}`}
                 onClick={() => {
-                  // FIX: Handle clicking the same track
                   if (currentIndex === index) {
-                    // If same track, manually ensure it plays if paused
                     if (!isPlaying) {
                       audioRef.current?.play();
                       setIsPlaying(true);
-                    } else {
-                      // Optional: pause if clicked again?
-                      // Standard playlist behavior usually just resumes or restarts.
-                      // Let's stick to Resume logic.
                     }
                   } else {
-                    // Different track: Switch index (useEffect handles play)
                     setCurrentIndex(index);
                     setIsPlaying(true);
                   }

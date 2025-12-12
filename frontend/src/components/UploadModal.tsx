@@ -11,6 +11,7 @@ import {
   Video,
   Loader2,
 } from "lucide-react";
+import TagSelector from "@/components/TagSelector";
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -29,6 +30,10 @@ export default function UploadModal({
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
   const [region, setRegion] = useState("");
+
+  // New: Tag State
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+
   const [isUploading, setIsUploading] = useState(false);
   const [message, setMessage] = useState<{
     text: string;
@@ -43,6 +48,7 @@ export default function UploadModal({
       setFile(null);
       setTitle("");
       setRegion("");
+      setSelectedTags([]); // Reset tags
       setMessage(null);
       setIsUploading(false);
     }
@@ -69,33 +75,88 @@ export default function UploadModal({
       } = await supabase.auth.getUser();
       if (!user) throw new Error("User not found");
 
-      // 1. Upload File
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${Date.now()}-${Math.random()}.${fileExt}`;
-      const bucket = "media";
+      // 1. Prepare File for Python Backend
+      const formData = new FormData();
+      formData.append("file", file);
 
-      const { error: uploadError } = await supabase.storage
-        .from(bucket)
-        .upload(fileName, file);
-
-      if (uploadError) throw uploadError;
-
-      const { data: publicUrlData } = supabase.storage
-        .from(bucket)
-        .getPublicUrl(fileName);
-
-      // 2. Save Metadata
-      const { error: dbError } = await supabase.from("media_items").insert({
-        uploader_id: user.id,
-        title,
-        region,
-        media_type: activeTab,
-        file_path: publicUrlData.publicUrl,
+      // 2. Send to Python for Conversion
+      const response = await fetch("http://127.0.0.1:8000/upload/convert", {
+        method: "POST",
+        body: formData,
       });
 
-      if (dbError) throw dbError;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Conversion failed");
+      }
 
-      setMessage({ text: "Upload successful!", type: "success" });
+      const result = await response.json();
+
+      const finalUrl =
+        typeof result.public_url === "string"
+          ? result.public_url
+          : result.public_url?.data?.publicUrl;
+
+      const thumbUrl =
+        typeof result.thumbnail_url === "string"
+          ? result.thumbnail_url
+          : result.thumbnail_url?.data?.publicUrl;
+
+      if (!finalUrl) throw new Error("Failed to retrieve public URL");
+
+      // 3. Save Metadata (And get the new ID)
+      const { data: mediaData, error: dbError } = await supabase
+        .from("media_items")
+        .insert({
+          uploader_id: user.id,
+          title,
+          region,
+          media_type: activeTab,
+          file_path: finalUrl,
+          thumbnail_url: thumbUrl || null,
+        })
+        .select()
+        .single(); // <--- Important: Get the new row back
+
+      if (dbError || !mediaData) throw dbError;
+
+      // 4. Save Tags (if any)
+      if (selectedTags.length > 0) {
+        for (const tagName of selectedTags) {
+          // A. Find or Create Tag
+          let tagId: number | null = null;
+
+          // Check if exists
+          const { data: existingTag } = await supabase
+            .from("tags")
+            .select("id")
+            .eq("name", tagName)
+            .single();
+
+          if (existingTag) {
+            tagId = existingTag.id;
+          } else {
+            // Create new
+            const { data: newTag } = await supabase
+              .from("tags")
+              .insert({ name: tagName })
+              .select()
+              .single();
+            if (newTag) tagId = newTag.id;
+          }
+
+          // B. Link Tag to Media
+          if (tagId) {
+            await supabase.from("media_tags").insert({
+              media_id: mediaData.id,
+              tag_id: tagId,
+            });
+          }
+        }
+      }
+
+      setMessage({ text: "Upload & Conversion successful!", type: "success" });
+
       setTimeout(() => {
         onUploadSuccess();
         onClose();
@@ -112,8 +173,8 @@ export default function UploadModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden scale-100 animate-in zoom-in-95 duration-200">
-        <div className="flex items-center justify-between p-4 border-b border-zinc-800">
+      <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden scale-100 animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+        <div className="flex items-center justify-between p-4 border-b border-zinc-800 shrink-0">
           <h2 className="text-lg font-bold text-white">Upload Media</h2>
           <button
             onClick={onClose}
@@ -123,7 +184,7 @@ export default function UploadModal({
           </button>
         </div>
 
-        <div className="flex border-b border-zinc-800">
+        <div className="flex border-b border-zinc-800 shrink-0">
           <button
             onClick={() => setActiveTab("audio")}
             className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 transition-colors ${
@@ -146,7 +207,8 @@ export default function UploadModal({
           </button>
         </div>
 
-        <div className="p-6 space-y-4">
+        <div className="p-6 space-y-4 overflow-y-auto">
+          {/* File Picker */}
           <div
             onClick={() => fileInputRef.current?.click()}
             className="border-2 border-dashed border-zinc-700 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer hover:border-indigo-500 hover:bg-zinc-800/50 transition-all group"
@@ -180,6 +242,7 @@ export default function UploadModal({
             )}
           </div>
 
+          {/* Form Fields */}
           <div className="space-y-3">
             <div>
               <label className="text-xs font-bold text-zinc-500 uppercase ml-1">
@@ -193,6 +256,7 @@ export default function UploadModal({
                 className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white text-sm focus:border-indigo-500 outline-none transition-colors"
               />
             </div>
+
             <div>
               <label className="text-xs font-bold text-zinc-500 uppercase ml-1">
                 Region
@@ -205,6 +269,12 @@ export default function UploadModal({
                 className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white text-sm focus:border-indigo-500 outline-none transition-colors"
               />
             </div>
+
+            {/* Tag Selector */}
+            <TagSelector
+              selectedTags={selectedTags}
+              onChange={setSelectedTags}
+            />
           </div>
 
           {message && (
@@ -234,7 +304,7 @@ export default function UploadModal({
             ) : (
               <Upload size={20} />
             )}
-            {isUploading ? "Uploading..." : "Upload Media"}
+            {isUploading ? "Optimizing & Uploading..." : "Upload Media"}
           </button>
         </div>
       </div>

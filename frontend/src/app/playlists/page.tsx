@@ -4,22 +4,27 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import {
-  LogOut,
-  Music,
-  Video,
-  PlusCircle,
-  Home,
-  ListMusic,
-  Trash2,
-  Calendar,
-  FolderOpen,
   Plus,
-  Play,
   Edit2,
   Globe,
-  User,
   Layers,
-} from "lucide-react"; // Added Layers icon for Logo
+  Trash2,
+  Lock,
+  User as UserIcon, // Alias to avoid conflict
+} from "lucide-react";
+import Link from "next/link"; // Added for Mobile Header
+
+// Types
+import { Database } from "@/types/supabase";
+
+// EXTENDED TYPE: Includes item count AND creator profile
+type PlaylistWithData = Database["public"]["Tables"]["playlists"]["Row"] & {
+  playlist_items: { count: number }[];
+  profiles: {
+    display_name: string | null;
+    avatar_url: string | null;
+  } | null;
+};
 
 // Components
 import Modal from "@/components/ui/Modal";
@@ -35,15 +40,20 @@ import KebabMenu from "@/components/ui/KebabMenu";
 export default function PlaylistsPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   // DATA
-  const [myPlaylists, setMyPlaylists] = useState<any[]>([]);
-  const [sharedPlaylists, setSharedPlaylists] = useState<any[]>([]);
+  const [myPlaylists, setMyPlaylists] = useState<PlaylistWithData[]>([]);
+  const [sharedPlaylists, setSharedPlaylists] = useState<PlaylistWithData[]>(
+    []
+  );
 
-  // ACTIONS
+  // UI STATE
+  const [activeTab, setActiveTab] = useState<"mine" | "shared">("mine");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
-  const [editingPlaylist, setEditingPlaylist] = useState<any>(null);
+  const [editingPlaylist, setEditingPlaylist] =
+    useState<PlaylistWithData | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [toast, setToast] = useState<{
     msg: string;
@@ -66,15 +76,31 @@ export default function PlaylistsPage() {
       router.push("/login");
       return;
     }
+    setCurrentUserId(user.id);
 
+    // UPDATED QUERY: Fetch profile data too!
     const { data } = await supabase
       .from("playlists")
-      .select("*, playlist_items(count)")
+      .select(
+        `
+        *, 
+        playlist_items(count),
+        profiles (
+          display_name,
+          avatar_url
+        )
+      `
+      )
       .order("created_at", { ascending: false });
 
     if (data) {
-      const mine = data.filter((p) => p.user_id === user.id);
-      const shared = data.filter((p) => p.user_id !== user.id && p.is_public);
+      const typedData = data as unknown as PlaylistWithData[];
+
+      const mine = typedData.filter(
+        (p) => p.user_id === user.id && !p.is_public
+      );
+      const shared = typedData.filter((p) => p.is_public);
+
       setMyPlaylists(mine);
       setSharedPlaylists(shared);
     }
@@ -87,6 +113,7 @@ export default function PlaylistsPage() {
       .select("*, media_items(*)")
       .eq("playlist_id", playlistId)
       .order("order_index");
+
     if (data && data.length > 0) {
       const tracks = data.map((item: any) => item.media_items);
       setPlayerPlaylist(tracks);
@@ -102,12 +129,16 @@ export default function PlaylistsPage() {
       .from("playlists")
       .delete()
       .eq("id", deleteId);
+
     if (!error) {
       setMyPlaylists(myPlaylists.filter((p) => p.id !== deleteId));
+      setSharedPlaylists(sharedPlaylists.filter((p) => p.id !== deleteId));
       setToast({ msg: "Playlist deleted", type: "success" });
     }
     setDeleteId(null);
   };
+
+  const activeList = activeTab === "mine" ? myPlaylists : sharedPlaylists;
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col md:flex-row pb-20 md:pb-0">
@@ -156,6 +187,7 @@ export default function PlaylistsPage() {
           setEditingPlaylist(null);
         }}
         title={editingPlaylist ? "Edit Playlist" : "New Playlist"}
+        className="max-w-4xl"
       >
         <CreatePlaylistForm
           initialData={editingPlaylist}
@@ -175,49 +207,97 @@ export default function PlaylistsPage() {
       <Sidebar onUpload={() => setIsUploadOpen(true)} />
 
       <main className="flex-1 p-4 md:p-8 overflow-y-auto h-screen">
-        {/* MOBILE BRAND HEADER (RESTORED) */}
+        {/* MOBILE HEADER */}
         <div className="md:hidden flex items-center gap-2 mb-6">
           <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/30">
             <Layers size={18} className="text-white" />
           </div>
-          <h1 className="text-xl font-bold tracking-tight text-white">
-            Sarape
-          </h1>
+          <Link href="/dashboard">
+            <h1 className="text-xl font-bold tracking-tight text-white">
+              Sarape
+            </h1>
+          </Link>
         </div>
 
         {/* Page Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-8 gap-4">
           <div>
             <h2 className="text-2xl font-bold">Playlists</h2>
-            <p className="text-zinc-400">Manage your setlists.</p>
+            <p className="text-zinc-400 text-sm hidden sm:block">
+              Manage your setlists.
+            </p>
           </div>
           <button
             onClick={() => setIsCreateOpen(true)}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg font-bold shadow-lg shadow-indigo-500/20 transition-all"
+            className="shrink-0 flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-xl font-bold shadow-lg shadow-indigo-500/20 transition-all text-sm sm:text-base"
           >
-            <Plus size={20} />{" "}
+            <Plus size={20} />
             <span className="hidden sm:inline">Add Playlist</span>
+            <span className="sm:hidden">New</span>
           </button>
         </div>
 
-        {/* MY PLAYLISTS */}
-        <div className="mb-10">
-          <h3 className="text-sm font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-            <User size={14} /> My Playlists
-          </h3>
-          {myPlaylists.length === 0 ? (
-            <div className="h-32 border border-dashed border-zinc-800 rounded-xl flex items-center justify-center text-zinc-600 text-sm">
-              You haven't created any playlists yet.
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {myPlaylists.map((playlist) => (
+        {/* TABS */}
+        <div className="flex gap-6 border-b border-zinc-800 mb-8">
+          <button
+            onClick={() => setActiveTab("mine")}
+            className={`flex items-center gap-2 pb-3 px-1 text-sm font-bold border-b-2 transition-colors ${
+              activeTab === "mine"
+                ? "border-indigo-500 text-indigo-400"
+                : "border-transparent text-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            <Lock size={16} /> Private
+            <span className="bg-zinc-900 text-zinc-400 px-2 py-0.5 rounded-full text-[10px] ml-1 border border-zinc-800">
+              {myPlaylists.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("shared")}
+            className={`flex items-center gap-2 pb-3 px-1 text-sm font-bold border-b-2 transition-colors ${
+              activeTab === "shared"
+                ? "border-green-500 text-green-500"
+                : "border-transparent text-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            <Globe size={16} /> Public
+            <span className="bg-zinc-900 text-zinc-400 px-2 py-0.5 rounded-full text-[10px] ml-1 border border-zinc-800">
+              {sharedPlaylists.length}
+            </span>
+          </button>
+        </div>
+
+        {/* GRID CONTENT */}
+        {activeList.length === 0 ? (
+          <div className="h-48 border border-dashed border-zinc-800 rounded-xl flex flex-col items-center justify-center text-zinc-600 gap-2">
+            <Layers size={32} className="opacity-20" />
+            <p className="text-sm">
+              {activeTab === "mine"
+                ? "No private playlists."
+                : "No public playlists available."}
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {activeList.map((playlist) => {
+              const isOwner = playlist.user_id === currentUserId;
+              // Safely access profile data (might be null if user deleted or system error)
+              const creatorName = playlist.profiles?.display_name || "Unknown";
+              const creatorAvatar = playlist.profiles?.avatar_url;
+
+              return (
                 <div
                   key={playlist.id}
                   onClick={() => handlePlayPlaylist(playlist.id)}
-                  className="bg-zinc-900/50 border border-zinc-800 p-5 rounded-xl hover:border-indigo-500/50 hover:bg-zinc-900 transition-all group relative cursor-pointer"
+                  className={`group relative p-5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between min-h-[160px] ${
+                    playlist.is_public
+                      ? "bg-zinc-900/30 border-zinc-800 hover:border-green-500/30 hover:bg-zinc-900"
+                      : "bg-zinc-900/50 border-zinc-800 hover:border-indigo-500/50 hover:bg-zinc-900"
+                  }`}
                 >
-                  <div className="flex justify-between items-start mb-4">
+                  {/* Top Row */}
+                  <div className="flex justify-between items-start">
                     <div
                       className={`p-3 rounded-lg transition-colors shadow-inner ${
                         playlist.is_public
@@ -228,81 +308,72 @@ export default function PlaylistsPage() {
                       {playlist.is_public ? (
                         <Globe size={24} />
                       ) : (
-                        <Play size={24} className="ml-1" />
+                        <Lock size={24} />
                       )}
                     </div>
-                    <div
-                      className="relative z-10"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <KebabMenu
-                        items={[
-                          {
-                            label: "Edit",
-                            icon: <Edit2 size={16} />,
-                            onClick: () => setEditingPlaylist(playlist),
-                          },
-                          {
-                            label: "Delete",
-                            icon: <Trash2 size={16} />,
-                            onClick: () => setDeleteId(playlist.id),
-                            variant: "danger",
-                          },
-                        ]}
-                      />
-                    </div>
-                  </div>
-                  <h3 className="font-bold text-lg mb-1 truncate">
-                    {playlist.title}
-                  </h3>
-                  <div className="flex items-center gap-4 text-xs text-zinc-500 font-mono mt-4 pt-4 border-t border-zinc-800/50">
-                    <span>{playlist.playlist_items[0]?.count || 0} tracks</span>
-                    {playlist.is_public && (
-                      <span className="text-green-500 flex items-center gap-1">
-                        <Globe size={10} /> Public
-                      </span>
+
+                    {isOwner && (
+                      <div
+                        className="relative z-10"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <KebabMenu
+                          items={[
+                            {
+                              label: "Edit",
+                              icon: <Edit2 size={16} />,
+                              onClick: () => setEditingPlaylist(playlist),
+                            },
+                            {
+                              label: "Delete",
+                              icon: <Trash2 size={16} />,
+                              onClick: () => setDeleteId(playlist.id),
+                              variant: "danger",
+                            },
+                          ]}
+                        />
+                      </div>
                     )}
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
 
-        {/* SHARED PLAYLISTS */}
-        <div>
-          <h3 className="text-sm font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-            <Globe size={14} /> Troupe Setlists
-          </h3>
-          {sharedPlaylists.length === 0 ? (
-            <div className="text-zinc-600 text-sm italic">
-              No shared playlists available.
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {sharedPlaylists.map((playlist) => (
-                <div
-                  key={playlist.id}
-                  onClick={() => handlePlayPlaylist(playlist.id)}
-                  className="bg-zinc-900/30 border border-zinc-800 p-5 rounded-xl hover:bg-zinc-900 transition-all cursor-pointer hover:border-green-500/30"
-                >
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="p-3 bg-zinc-950 rounded-lg text-green-500 shadow-inner">
-                      <Globe size={24} />
+                  {/* Title */}
+                  <div className="mt-4">
+                    <h3 className="font-bold text-lg leading-tight truncate text-zinc-200 group-hover:text-white">
+                      {playlist.title}
+                    </h3>
+                    <p className="text-xs text-zinc-500 font-mono mt-1">
+                      {playlist.playlist_items[0]?.count || 0} tracks
+                    </p>
+                  </div>
+
+                  {/* Bottom Row: Creator Profile (Only for Shared) */}
+                  {activeTab === "shared" && (
+                    <div className="flex items-center gap-2 mt-4 pt-3 border-t border-zinc-800/50">
+                      {creatorAvatar ? (
+                        <img
+                          src={creatorAvatar}
+                          alt={creatorName}
+                          className="w-5 h-5 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-5 h-5 rounded-full bg-zinc-800 flex items-center justify-center">
+                          <UserIcon size={12} className="text-zinc-500" />
+                        </div>
+                      )}
+                      <span
+                        className={`text-xs ${
+                          isOwner ? "text-green-500 font-bold" : "text-zinc-500"
+                        }`}
+                      >
+                        {isOwner ? "You" : creatorName}
+                      </span>
                     </div>
-                  </div>
-                  <h3 className="font-bold text-lg mb-1 truncate text-zinc-300 group-hover:text-white">
-                    {playlist.title}
-                  </h3>
-                  <div className="flex items-center gap-4 text-xs text-zinc-500 font-mono mt-4 pt-4 border-t border-zinc-800/50">
-                    <span>{playlist.playlist_items[0]?.count || 0} tracks</span>
-                    <span className="text-zinc-600">Shared by Author</span>
-                  </div>
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </main>
 
       <MobileNav onUpload={() => setIsUploadOpen(true)} />

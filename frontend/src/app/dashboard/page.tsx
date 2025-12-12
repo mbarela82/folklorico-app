@@ -2,16 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link"; // Required for navigation
+import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
-import {
-  LogOut,
-  Music,
-  Video,
-  PlusCircle,
-  Home,
-  ListMusic, // Import the Playlist Icon
-} from "lucide-react";
+import { Layers, User } from "lucide-react";
+
+// Types
+import { Database } from "@/types/supabase";
+type MediaItem = Database["public"]["Tables"]["media_items"]["Row"];
+
 import Sidebar from "@/components/Sidebar";
 import MobileNav from "@/components/MobileNav";
 import UploadModal from "@/components/UploadModal";
@@ -21,22 +19,39 @@ import PracticeStudio from "@/components/PracticeStudio";
 export default function Dashboard() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<any>(null);
-  const [isUploadOpen, setIsUploadOpen] = useState(false);
 
-  const [mediaItems, setMediaItems] = useState<any[]>([]);
-  const [currentMedia, setCurrentMedia] = useState<any>(null);
+  // Data State
+  const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
+  const [currentMedia, setCurrentMedia] = useState<MediaItem | null>(null);
+
+  // Profile State
+  const [profile, setProfile] = useState<{
+    display_name: string | null;
+    avatar_url: string | null;
+  } | null>(null);
+
+  const [isUploadOpen, setIsUploadOpen] = useState(false);
 
   useEffect(() => {
     const initData = async () => {
       const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session) {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
         router.push("/login");
         return;
       }
-      setUser(session.user);
+
+      // 1. Fetch Profile
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("display_name, avatar_url")
+        .eq("id", user.id)
+        .single();
+
+      if (profileData) setProfile(profileData);
+
+      // 2. Fetch Media
       await fetchMedia();
       setLoading(false);
     };
@@ -54,11 +69,6 @@ export default function Dashboard() {
     }
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push("/login");
-  };
-
   const handleUploadSuccess = () => {
     fetchMedia();
   };
@@ -72,10 +82,12 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col md:flex-row">
-      <PracticeStudio
-        media={currentMedia}
-        onClose={() => setCurrentMedia(null)}
-      />
+      {currentMedia && (
+        <PracticeStudio
+          media={currentMedia as any}
+          onClose={() => setCurrentMedia(null)}
+        />
+      )}
 
       <UploadModal
         isOpen={isUploadOpen}
@@ -83,28 +95,69 @@ export default function Dashboard() {
         onUploadSuccess={handleUploadSuccess}
       />
 
-      {/* --- SIDEBAR (Desktop) --- */}
       <Sidebar onUpload={() => setIsUploadOpen(true)} />
 
-      {/* --- MAIN CONTENT --- */}
       <main className="flex-1 p-4 md:p-8 overflow-y-auto h-screen">
-        <div className="md:hidden flex justify-between items-center mb-6">
-          <h1 className="text-lg font-bold text-white flex items-center gap-2">
-            <div className="w-6 h-6 bg-indigo-600 rounded flex items-center justify-center">
-              <span className="font-bold text-xs text-white">S</span>
+        {/* --- MOBILE HEADER --- */}
+        <div className="md:hidden flex items-center justify-between mb-8">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/30">
+              <Layers size={18} className="text-white" />
             </div>
-            Sarape
-          </h1>
-          <button onClick={handleLogout} className="text-zinc-400">
-            <LogOut size={20} />
-          </button>
+            <Link href="/dashboard">
+              <h1 className="text-xl font-bold tracking-tight text-white">
+                Sarape
+              </h1>
+            </Link>
+          </div>
+
+          {/* Mobile Profile Avatar (Small) */}
+          <Link href="/profile">
+            {profile?.avatar_url ? (
+              <img
+                src={profile.avatar_url}
+                className="w-8 h-8 rounded-full border border-zinc-700 object-cover"
+              />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center border border-zinc-700">
+                <User size={14} className="text-zinc-500" />
+              </div>
+            )}
+          </Link>
         </div>
 
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold">Welcome back!</h2>
-          <p className="text-zinc-400">Here is your troupe's collection.</p>
+        {/* --- WELCOME SECTION --- */}
+        <div className="mb-8 flex items-center gap-4">
+          {/* Desktop/Tablet Avatar */}
+          <div className="hidden md:block w-16 h-16 rounded-full overflow-hidden border-2 border-zinc-800 shadow-xl bg-zinc-900">
+            {profile?.avatar_url ? (
+              <img
+                src={profile.avatar_url}
+                alt="Profile"
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-zinc-600">
+                <User size={32} />
+              </div>
+            )}
+          </div>
+
+          <div>
+            <h2 className="text-2xl md:text-3xl font-bold text-white">
+              Welcome back,{" "}
+              <span className="text-indigo-400">
+                {profile?.display_name || "Dancer"}
+              </span>
+              !
+            </h2>
+            <p className="text-zinc-400 mt-1">
+              Here is the latest from your troupe.
+            </p>
+          </div>
         </div>
 
+        {/* --- CONTENT --- */}
         {mediaItems.length === 0 ? (
           <div className="h-40 border border-dashed border-zinc-800 rounded-xl flex items-center justify-center text-zinc-500">
             No media uploaded yet. Click Upload to start!
@@ -115,8 +168,9 @@ export default function Dashboard() {
               <MediaCard
                 key={item.id}
                 title={item.title}
-                region={item.region}
+                region={item.region || ""}
                 type={item.media_type}
+                thumbnailUrl={item.thumbnail_url}
                 onClick={() => setCurrentMedia(item)}
               />
             ))}
@@ -124,53 +178,7 @@ export default function Dashboard() {
         )}
       </main>
 
-      {/* --- BOTTOM NAV (Mobile) --- */}
       <MobileNav onUpload={() => setIsUploadOpen(true)} />
-    </div>
-  );
-}
-
-// Helpers
-function NavItem({
-  icon,
-  label,
-  active,
-}: {
-  icon: any;
-  label: string;
-  active?: boolean;
-}) {
-  return (
-    <div
-      className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
-        active
-          ? "bg-indigo-600/10 text-indigo-400"
-          : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
-      }`}
-    >
-      {icon}
-      <span className="font-medium">{label}</span>
-    </div>
-  );
-}
-
-function MobileNavItem({
-  icon,
-  label,
-  active,
-}: {
-  icon: any;
-  label: string;
-  active?: boolean;
-}) {
-  return (
-    <div
-      className={`flex flex-col items-center gap-1 ${
-        active ? "text-indigo-400" : "text-zinc-500"
-      }`}
-    >
-      {icon}
-      <span className="text-[10px] font-medium">{label}</span>
     </div>
   );
 }

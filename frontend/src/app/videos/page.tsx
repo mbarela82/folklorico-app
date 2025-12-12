@@ -1,9 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
-import { Video, PlusCircle, MapPin, Filter, Layers } from "lucide-react"; // Added Layers
+import { Video, PlusCircle, MapPin, Filter, Layers } from "lucide-react";
+
+// Types
+import { Database } from "@/types/supabase";
+type MediaItemWithTags = Database["public"]["Tables"]["media_items"]["Row"] & {
+  tags?: string[];
+};
 
 import Sidebar from "@/components/Sidebar";
 import MobileNav from "@/components/MobileNav";
@@ -14,18 +21,28 @@ import Modal from "@/components/ui/Modal";
 import ConfirmationModal from "@/components/ConfirmationModal";
 import EditMediaForm from "@/components/EditMediaForm";
 import Toast from "@/components/Toast";
+import TagFilterBar from "@/components/TagFilterBar";
 
 export default function VideoPage() {
   const router = useRouter();
-  const [mediaItems, setMediaItems] = useState<any[]>([]);
-  const [currentMedia, setCurrentMedia] = useState<any>(null);
+
+  // Data State
+  const [mediaItems, setMediaItems] = useState<MediaItemWithTags[]>([]);
+  const [currentMedia, setCurrentMedia] = useState<MediaItemWithTags | null>(
+    null
+  );
   const [loading, setLoading] = useState(true);
 
+  // Filter State
   const [selectedRegion, setSelectedRegion] = useState<string>("All");
   const [regions, setRegions] = useState<string[]>([]);
+  const [filterTag, setFilterTag] = useState<string | null>(null);
 
+  // UI State
   const [isUploadOpen, setIsUploadOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState<any>(null);
+  const [editingItem, setEditingItem] = useState<MediaItemWithTags | null>(
+    null
+  );
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [toast, setToast] = useState<{
     msg: string;
@@ -37,15 +54,21 @@ export default function VideoPage() {
     fetchVideos();
   }, [selectedRegion]);
 
+  const availableTags = useMemo(() => {
+    const allTags = mediaItems.flatMap((item) => item.tags || []);
+    return Array.from(new Set(allTags)).sort();
+  }, [mediaItems]);
+
   const fetchRegions = async () => {
     const { data } = await supabase
       .from("media_items")
       .select("region")
       .eq("media_type", "video")
       .order("region");
+
     if (data) {
       const unique = Array.from(
-        new Set(data.map((item) => item.region).filter(Boolean))
+        new Set(data.map((item) => item.region).filter(Boolean) as string[])
       );
       setRegions(unique);
     }
@@ -63,29 +86,55 @@ export default function VideoPage() {
 
     let query = supabase
       .from("media_items")
-      .select("*")
+      .select(
+        `
+        *,
+        media_tags (
+          tags (name)
+        )
+      `
+      )
       .eq("media_type", "video")
       .order("title");
+
     if (selectedRegion !== "All") query = query.eq("region", selectedRegion);
 
     const { data, error } = await query;
-    if (!error) setMediaItems(data || []);
+
+    if (!error && data) {
+      const formatted = data.map((item: any) => ({
+        ...item,
+        tags: item.media_tags.map((mt: any) => mt.tags.name),
+      }));
+      setMediaItems(formatted);
+    }
     setLoading(false);
   };
 
   const handleDelete = async () => {
     if (!deleteId) return;
-    const { error } = await supabase
-      .from("media_items")
-      .delete()
-      .eq("id", deleteId);
-    if (!error) {
+
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/media/${deleteId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) throw new Error("Failed to delete video");
+
       setMediaItems(mediaItems.filter((item) => item.id !== deleteId));
       fetchRegions();
-      setToast({ msg: "Video deleted", type: "success" });
+      setToast({ msg: "Video deleted successfully", type: "success" });
+    } catch (error) {
+      console.error(error);
+      setToast({ msg: "Error deleting video", type: "error" });
     }
     setDeleteId(null);
   };
+
+  const filteredItems = mediaItems.filter((item) => {
+    if (!filterTag) return true;
+    return item.tags && item.tags.includes(filterTag);
+  });
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col md:flex-row pb-20 md:pb-0">
@@ -96,10 +145,14 @@ export default function VideoPage() {
           onClose={() => setToast(null)}
         />
       )}
-      <PracticeStudio
-        media={currentMedia}
-        onClose={() => setCurrentMedia(null)}
-      />
+
+      {currentMedia && (
+        <PracticeStudio
+          media={currentMedia as any}
+          onClose={() => setCurrentMedia(null)}
+        />
+      )}
+
       <UploadModal
         isOpen={isUploadOpen}
         onClose={() => setIsUploadOpen(false)}
@@ -110,6 +163,7 @@ export default function VideoPage() {
         }}
         defaultType="video"
       />
+
       <Modal
         isOpen={!!editingItem}
         onClose={() => setEditingItem(null)}
@@ -128,6 +182,7 @@ export default function VideoPage() {
           />
         )}
       </Modal>
+
       <ConfirmationModal
         isOpen={!!deleteId}
         onClose={() => setDeleteId(null)}
@@ -141,18 +196,20 @@ export default function VideoPage() {
       <Sidebar onUpload={() => setIsUploadOpen(true)} />
 
       <main className="flex-1 p-4 md:p-8 overflow-y-auto h-screen">
-        {/* MOBILE BRAND HEADER (RESTORED) */}
+        {/* MOBILE BRAND HEADER */}
         <div className="md:hidden flex items-center gap-2 mb-6">
           <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/30">
             <Layers size={18} className="text-white" />
           </div>
-          <h1 className="text-xl font-bold tracking-tight text-white">
-            Sarape
-          </h1>
+          <Link href="/dashboard">
+            <h1 className="text-xl font-bold tracking-tight text-white">
+              Sarape
+            </h1>
+          </Link>
         </div>
 
-        {/* HEADER */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
+        {/* HEADER & CONTROLS */}
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-4">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <Video className="text-indigo-400" /> Video Library
@@ -160,8 +217,8 @@ export default function VideoPage() {
             <p className="text-zinc-400">Choreography and rehearsal footage.</p>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-            <div className="relative w-full sm:w-64">
+          <div className="flex flex-row gap-3 w-full md:w-auto items-center">
+            <div className="relative flex-1 sm:w-64">
               <div className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none">
                 <MapPin size={16} />
               </div>
@@ -181,31 +238,46 @@ export default function VideoPage() {
                 <Filter size={12} />
               </div>
             </div>
+
+            {/* UPLOAD BUTTON (Visible on Mobile) */}
             <button
               onClick={() => setIsUploadOpen(true)}
-              className="hidden sm:flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-indigo-500/20 transition-all"
+              className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-3 rounded-xl font-bold shadow-lg shadow-indigo-500/20 transition-all shrink-0"
+              title="Upload Video"
             >
-              <PlusCircle size={20} /> <span>Upload</span>
+              <PlusCircle size={20} />
+              <span className="hidden sm:inline">Upload</span>
             </button>
           </div>
+        </div>
+
+        {/* TAG FILTER BAR */}
+        <div className="mb-6">
+          <TagFilterBar
+            availableTags={availableTags}
+            selectedTag={filterTag}
+            onSelectTag={setFilterTag}
+          />
         </div>
 
         {/* LIST */}
         {loading ? (
           <div className="text-zinc-500 animate-pulse">Loading...</div>
-        ) : mediaItems.length === 0 ? (
+        ) : filteredItems.length === 0 ? (
           <div className="h-64 border border-dashed border-zinc-800 rounded-2xl flex flex-col items-center justify-center text-zinc-500 gap-4">
             <Video size={48} className="opacity-20" />
             <p>No videos found.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {mediaItems.map((item) => (
+            {filteredItems.map((item) => (
               <MediaCard
                 key={item.id}
                 title={item.title}
-                region={item.region}
+                region={item.region || ""}
                 type="video"
+                thumbnailUrl={item.thumbnail_url}
+                tags={item.tags}
                 onClick={() => setCurrentMedia(item)}
                 onEdit={() => setEditingItem(item)}
                 onDelete={() => setDeleteId(item.id)}
