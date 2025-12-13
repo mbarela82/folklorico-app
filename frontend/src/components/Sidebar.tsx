@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react"; // <--- Add Hook imports
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient"; // <--- Add Supabase
+import { supabase } from "@/lib/supabaseClient";
 import {
   Home,
   Music,
@@ -16,15 +16,24 @@ import {
 
 interface SidebarProps {
   onUpload: () => void;
-  isAdmin?: boolean; // Optional prop if we pass it down, but we can also fetch it
+  isAdmin?: boolean;
 }
 
 export default function Sidebar({ onUpload }: SidebarProps) {
   const pathname = usePathname();
+
+  // FIX: Revert to standard state to prevent Hydration Error
   const [role, setRole] = useState<string>("dancer");
 
-  // Fetch Role on Mount
   useEffect(() => {
+    // 1. FAST CHECK: specific to the client browser
+    // This runs immediately after the component mounts
+    const cached = localStorage.getItem("sarape_user_role");
+    if (cached) {
+      setRole(cached);
+    }
+
+    // 2. SECURITY CHECK: Verify with database in background
     const getRole = async () => {
       const {
         data: { user },
@@ -35,7 +44,14 @@ export default function Sidebar({ onUpload }: SidebarProps) {
           .select("role")
           .eq("id", user.id)
           .single();
-        if (data) setRole(data.role);
+
+        if (data) {
+          // Update state and cache if it changed
+          if (data.role !== cached) {
+            setRole(data.role);
+            localStorage.setItem("sarape_user_role", data.role);
+          }
+        }
       }
     };
     getRole();
@@ -64,7 +80,11 @@ export default function Sidebar({ onUpload }: SidebarProps) {
         <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/30">
           <Layers size={18} className="text-white" />
         </div>
-        <h1 className="text-xl font-bold tracking-tight text-white">Sarape</h1>
+        <Link href="/dashboard">
+          <h1 className="text-xl font-bold tracking-tight text-white">
+            Sarape
+          </h1>
+        </Link>
       </div>
 
       <nav className="flex-1 px-4 space-y-2 mt-4">

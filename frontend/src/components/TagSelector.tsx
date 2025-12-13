@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { X, Tag, ArrowUp } from "lucide-react"; // Added ArrowUp
+import { X, Tag, ArrowUp } from "lucide-react";
 import { Database } from "@/types/supabase";
 
 type TagItem = Database["public"]["Tables"]["tags"]["Row"];
@@ -39,15 +39,20 @@ export default function TagSelector({
     setShowSuggestions(false);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      handleAddTag(input);
-    }
-  };
-
   const removeTag = (tag: string) => {
     onChange(selectedTags.filter((t) => t !== tag));
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault(); // Prevent form submission
+      handleAddTag(input);
+    }
+    // FIX: Allow deleting the last tag with Backspace if input is empty
+    if (e.key === "Backspace" && input === "" && selectedTags.length > 0) {
+      const lastTag = selectedTags[selectedTags.length - 1];
+      removeTag(lastTag);
+    }
   };
 
   // Filter suggestions based on input
@@ -63,10 +68,7 @@ export default function TagSelector({
         <Tag size={12} /> Tags
       </label>
 
-      {/* FIX: Scrollable Tag Container 
-         - max-h-24: Limits height to about 3 lines of tags
-         - overflow-y-auto: Scrolls if you add more
-      */}
+      {/* Selected Tags Area */}
       {selectedTags.length > 0 && (
         <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto p-1 no-scrollbar">
           {selectedTags.map((tag) => (
@@ -76,6 +78,7 @@ export default function TagSelector({
             >
               #{tag}
               <button
+                type="button" // FIX: Prevent form submission
                 onClick={() => removeTag(tag)}
                 className="hover:text-white transition-colors ml-0.5"
               >
@@ -86,7 +89,7 @@ export default function TagSelector({
         </div>
       )}
 
-      {/* Input Field with Mobile "Add" Button */}
+      {/* Input Field */}
       <div className="relative group">
         <input
           type="text"
@@ -98,12 +101,14 @@ export default function TagSelector({
           }}
           onKeyDown={handleKeyDown}
           onFocus={() => setShowSuggestions(true)}
+          // Delay blur to allow clicking suggestions
           onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
           className="w-full bg-zinc-950 border border-zinc-800 rounded-lg py-3 pl-3 pr-12 text-white text-sm focus:border-indigo-500 outline-none transition-colors"
         />
 
-        {/* The Mobile "Add" Button */}
+        {/* Add Button */}
         <button
+          type="button" // FIX: Explicitly set type button
           onClick={() => handleAddTag(input)}
           disabled={!input.trim()}
           className={`absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md transition-all ${
@@ -121,6 +126,7 @@ export default function TagSelector({
             {suggestions.map((t) => (
               <button
                 key={t.id}
+                type="button" // FIX: Explicitly set type button
                 onClick={() => handleAddTag(t.name)}
                 className="w-full text-left px-4 py-2 text-sm text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors border-b border-zinc-800/50 last:border-0"
               >

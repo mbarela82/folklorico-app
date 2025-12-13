@@ -1,87 +1,33 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { supabase } from "@/lib/supabaseClient";
-import { Layers, User } from "lucide-react";
+import { Layers, User, Music, Video, ArrowRight, Upload } from "lucide-react";
+import { useState } from "react";
+
+// Hooks
+import { useProfile, useRecentMedia } from "@/hooks/useTroupeData";
+
+// Components
+import AnnouncementBanner from "@/components/AnnouncementBanner";
+import MediaCard from "@/components/MediaCard";
+import PracticeStudio from "@/components/PracticeStudio";
+import UploadModal from "@/components/UploadModal";
 
 // Types
 import { Database } from "@/types/supabase";
 type MediaItem = Database["public"]["Tables"]["media_items"]["Row"];
 
-import Sidebar from "@/components/Sidebar";
-import MobileNav from "@/components/MobileNav";
-import UploadModal from "@/components/UploadModal";
-import MediaCard from "@/components/MediaCard";
-import PracticeStudio from "@/components/PracticeStudio";
-
 export default function Dashboard() {
-  const router = useRouter();
-  const [loading, setLoading] = useState(true);
+  const { data: profile } = useProfile();
+  const { data: recentMedia = [] } = useRecentMedia();
 
-  // Data State
-  const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [currentMedia, setCurrentMedia] = useState<MediaItem | null>(null);
-
-  // Profile State
-  const [profile, setProfile] = useState<{
-    display_name: string | null;
-    avatar_url: string | null;
-  } | null>(null);
-
   const [isUploadOpen, setIsUploadOpen] = useState(false);
 
-  useEffect(() => {
-    const initData = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        router.push("/login");
-        return;
-      }
-
-      // 1. Fetch Profile
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("display_name, avatar_url")
-        .eq("id", user.id)
-        .single();
-
-      if (profileData) setProfile(profileData);
-
-      // 2. Fetch Media
-      await fetchMedia();
-      setLoading(false);
-    };
-    initData();
-  }, [router]);
-
-  const fetchMedia = async () => {
-    const { data, error } = await supabase
-      .from("media_items")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (!error) {
-      setMediaItems(data || []);
-    }
-  };
-
-  const handleUploadSuccess = () => {
-    fetchMedia();
-  };
-
-  if (loading)
-    return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-500">
-        Loading...
-      </div>
-    );
+  const isAdmin = profile?.role === "admin" || profile?.role === "teacher";
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col md:flex-row">
+    <main className="flex-1 p-4 md:p-8 overflow-y-auto h-full pb-24 md:pb-8">
       {currentMedia && (
         <PracticeStudio
           media={currentMedia as any}
@@ -89,96 +35,150 @@ export default function Dashboard() {
         />
       )}
 
+      {/* Upload Modal (Triggered by Quick Action) */}
       <UploadModal
         isOpen={isUploadOpen}
         onClose={() => setIsUploadOpen(false)}
-        onUploadSuccess={handleUploadSuccess}
+        onUploadSuccess={() => {}} // React Query handles the refresh
       />
 
-      <Sidebar onUpload={() => setIsUploadOpen(true)} />
-
-      <main className="flex-1 p-4 md:p-8 overflow-y-auto h-screen">
-        {/* --- MOBILE HEADER --- */}
-        <div className="md:hidden flex items-center justify-between mb-8">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/30">
-              <Layers size={18} className="text-white" />
+      {/* --- MOBILE BRAND HEADER --- */}
+      <div className="md:hidden flex items-center justify-between mb-6">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/30">
+            <Layers size={18} className="text-white" />
+          </div>
+          <h1 className="text-xl font-bold tracking-tight text-white">
+            Sarape
+          </h1>
+        </div>
+        <Link href="/profile">
+          {profile?.avatar_url ? (
+            <img
+              src={profile.avatar_url}
+              className="w-8 h-8 rounded-full border border-zinc-700 object-cover"
+            />
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center border border-zinc-700">
+              <User size={14} className="text-zinc-500" />
             </div>
-            <Link href="/dashboard">
-              <h1 className="text-xl font-bold tracking-tight text-white">
-                Sarape
-              </h1>
+          )}
+        </Link>
+      </div>
+
+      {/* 1. WELCOME & ANNOUNCEMENT */}
+      <div className="max-w-5xl mx-auto space-y-8">
+        <div className="space-y-4">
+          <h2 className="text-2xl font-bold text-white px-1">
+            Hola,{" "}
+            <span className="text-indigo-400">
+              {profile?.display_name || "Dancer"}
+            </span>
+          </h2>
+          <AnnouncementBanner />
+        </div>
+
+        {/* 2. QUICK ACTIONS */}
+        <div>
+          <h3 className="text-zinc-500 text-xs font-bold uppercase mb-3 px-1">
+            Quick Actions
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Link
+              href="/music"
+              className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 p-4 rounded-xl flex flex-col items-center justify-center gap-2 text-center transition-all group"
+            >
+              <div className="w-10 h-10 rounded-full bg-indigo-500/10 text-indigo-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <Music size={20} />
+              </div>
+              <span className="font-bold text-sm">Practice Music</span>
+            </Link>
+
+            <Link
+              href="/videos"
+              className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 p-4 rounded-xl flex flex-col items-center justify-center gap-2 text-center transition-all group"
+            >
+              <div className="w-10 h-10 rounded-full bg-purple-500/10 text-purple-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <Video size={20} />
+              </div>
+              <span className="font-bold text-sm">Watch Videos</span>
+            </Link>
+
+            {isAdmin ? (
+              <button
+                onClick={() => setIsUploadOpen(true)}
+                className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 p-4 rounded-xl flex flex-col items-center justify-center gap-2 text-center transition-all group"
+              >
+                <div className="w-10 h-10 rounded-full bg-green-500/10 text-green-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Upload size={20} />
+                </div>
+                <span className="font-bold text-sm">Upload New</span>
+              </button>
+            ) : (
+              <Link
+                href="/playlists"
+                className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 p-4 rounded-xl flex flex-col items-center justify-center gap-2 text-center transition-all group"
+              >
+                <div className="w-10 h-10 rounded-full bg-amber-500/10 text-amber-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Layers size={20} />
+                </div>
+                <span className="font-bold text-sm">My Lists</span>
+              </Link>
+            )}
+
+            <Link
+              href="/profile"
+              className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 p-4 rounded-xl flex flex-col items-center justify-center gap-2 text-center transition-all group"
+            >
+              <div className="w-10 h-10 rounded-full bg-zinc-800 text-zinc-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <User size={20} />
+              </div>
+              <span className="font-bold text-sm">Profile</span>
             </Link>
           </div>
-
-          {/* Mobile Profile Avatar (Small) */}
-          <Link href="/profile">
-            {profile?.avatar_url ? (
-              <img
-                src={profile.avatar_url}
-                className="w-8 h-8 rounded-full border border-zinc-700 object-cover"
-              />
-            ) : (
-              <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center border border-zinc-700">
-                <User size={14} className="text-zinc-500" />
-              </div>
-            )}
-          </Link>
         </div>
 
-        {/* --- WELCOME SECTION --- */}
-        <div className="mb-8 flex items-center gap-4">
-          {/* Desktop/Tablet Avatar */}
-          <div className="hidden md:block w-16 h-16 rounded-full overflow-hidden border-2 border-zinc-800 shadow-xl bg-zinc-900">
-            {profile?.avatar_url ? (
-              <img
-                src={profile.avatar_url}
-                alt="Profile"
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-zinc-600">
-                <User size={32} />
-              </div>
-            )}
+        {/* 3. JUST IN (Compact List) */}
+        <div>
+          <div className="flex items-center justify-between mb-3 px-1">
+            <h3 className="text-zinc-500 text-xs font-bold uppercase">
+              Just In
+            </h3>
+            {/* Optional 'View All' link could go here */}
           </div>
 
-          <div>
-            <h2 className="text-2xl md:text-3xl font-bold text-white">
-              Welcome back,{" "}
-              <span className="text-indigo-400">
-                {profile?.display_name || "Dancer"}
-              </span>
-              !
-            </h2>
-            <p className="text-zinc-400 mt-1">
-              Here is the latest from your troupe.
-            </p>
-          </div>
+          {recentMedia.length === 0 ? (
+            <div className="text-zinc-600 text-sm italic px-1">
+              No recent uploads.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {recentMedia.slice(0, 3).map((item) => (
+                // Using the existing MediaCard but constrained in a smaller grid
+                <MediaCard
+                  key={item.id}
+                  title={item.title}
+                  region={item.region || ""}
+                  type={item.media_type}
+                  thumbnailUrl={item.thumbnail_url}
+                  onClick={() => setCurrentMedia(item)}
+                />
+              ))}
+            </div>
+          )}
+
+          {recentMedia.length > 0 && (
+            <div className="mt-4 flex justify-center md:justify-start">
+              <Link
+                href="/music"
+                className="text-sm text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-medium"
+              >
+                View all library <ArrowRight size={14} />
+              </Link>
+            </div>
+          )}
         </div>
-
-        {/* --- CONTENT --- */}
-        {mediaItems.length === 0 ? (
-          <div className="h-40 border border-dashed border-zinc-800 rounded-xl flex items-center justify-center text-zinc-500">
-            No media uploaded yet. Click Upload to start!
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-20 md:pb-0">
-            {mediaItems.map((item) => (
-              <MediaCard
-                key={item.id}
-                title={item.title}
-                region={item.region || ""}
-                type={item.media_type}
-                thumbnailUrl={item.thumbnail_url}
-                onClick={() => setCurrentMedia(item)}
-              />
-            ))}
-          </div>
-        )}
-      </main>
-
-      <MobileNav onUpload={() => setIsUploadOpen(true)} />
-    </div>
+      </div>
+    </main>
   );
 }
