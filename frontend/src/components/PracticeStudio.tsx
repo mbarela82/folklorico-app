@@ -9,19 +9,19 @@ import {
   SkipBack,
   SkipForward,
   Bookmark,
-  Trash2,
   Volume2,
   VolumeX,
   Maximize,
   FlipHorizontal,
   Gauge,
   Repeat,
-  Globe,
-  Lock,
-  MessageSquare, // <-- Added for the Tab Icon
+  MessageSquare,
 } from "lucide-react";
 import WaveSurfer from "wavesurfer.js";
-import CommentSection from "@/components/CommentSection"; // <-- Added Component
+
+// Components
+import CommentSection from "@/components/CommentSection";
+import BookmarkList from "@/components/BookmarkList"; // <--- The new component
 
 import { Database } from "@/types/supabase";
 type MediaItem = Database["public"]["Tables"]["media_items"]["Row"];
@@ -80,7 +80,7 @@ export default function PracticeStudio({
   const [newMarkNote, setNewMarkNote] = useState("");
   const [isNewMarkPublic, setIsNewMarkPublic] = useState(false);
 
-  // --- NEW: TAB STATE ---
+  // Tabs
   const [activeTab, setActiveTab] = useState<"bookmarks" | "comments">(
     "bookmarks"
   );
@@ -89,7 +89,7 @@ export default function PracticeStudio({
   useEffect(() => {
     if (!media) return;
 
-    // Fetch User Role
+    // Fetch User Role & ID
     const initUser = async () => {
       const {
         data: { user },
@@ -172,8 +172,11 @@ export default function PracticeStudio({
     if (videoRef.current) videoRef.current.playbackRate = playbackRate;
   }, [playbackRate]);
 
+  // --- ACTIONS ---
+
   const fetchBookmarks = async () => {
     if (!media) return;
+    // RLS Policy (Secure) will handle filtering private/public automatically
     const { data } = await supabase
       .from("bookmarks")
       .select("*")
@@ -221,7 +224,6 @@ export default function PracticeStudio({
     const end = mark.start_time + loopDuration;
     loopRef.current = { a: start, b: end, active: true };
 
-    // Update State for Visuals
     setLoopA(start);
     setLoopB(end);
     setActiveLoopId(mark.id);
@@ -235,14 +237,16 @@ export default function PracticeStudio({
     if (loopRef.current.active && loopRef.current.a !== null) {
       const newB = loopRef.current.a + newDuration;
       loopRef.current.b = newB;
-      setLoopB(newB); // Update visual state
+      setLoopB(newB);
     }
   };
-  // ------------------
 
+  // --- SEEK & JUMP ---
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const time = parseFloat(e.target.value);
     const { a, b, active } = loopRef.current;
+
+    // If dragging outside loop, break loop
     if (active && a !== null && b !== null) {
       if (time < a - 1 || time > b + 1) {
         clearLoop();
@@ -250,7 +254,6 @@ export default function PracticeStudio({
     }
 
     setCurrentTime(time);
-
     if (media?.media_type === "video" && videoRef.current) {
       videoRef.current.currentTime = time;
     } else if (media?.media_type === "audio" && wavesurfer.current) {
@@ -260,6 +263,7 @@ export default function PracticeStudio({
 
   const jumpTo = (time: number) => {
     const { a, active } = loopRef.current;
+    // If jumping far away, break loop
     if (active && a !== null && Math.abs(time - a) > 0.5) {
       clearLoop();
     }
@@ -288,7 +292,6 @@ export default function PracticeStudio({
     const t = e.currentTarget.currentTime;
     setCurrentTime(t);
     setDuration(e.currentTarget.duration || 0);
-
     const { a, b, active } = loopRef.current;
     if (active && a !== null && b !== null) {
       if (t >= b || t < a - 0.5) {
@@ -298,6 +301,7 @@ export default function PracticeStudio({
     }
   };
 
+  // --- BOOKMARK CRUD ---
   const handleSaveBookmark = async () => {
     if (!media) return;
     const {
@@ -310,7 +314,7 @@ export default function PracticeStudio({
       user_id: user.id,
       start_time: currentTime,
       note: newMarkNote || `Mark at ${formatTime(currentTime)}`,
-      is_public: isNewMarkPublic, // Save the public status
+      is_public: isNewMarkPublic,
     });
 
     if (!error) {
@@ -321,8 +325,7 @@ export default function PracticeStudio({
     }
   };
 
-  const handleDeleteBookmark = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleDeleteBookmark = async (id: string) => {
     await supabase.from("bookmarks").delete().eq("id", id);
     if (activeLoopId === id) clearLoop();
     fetchBookmarks();
@@ -407,7 +410,7 @@ export default function PracticeStudio({
             </>
           )}
 
-          {/* AUDIO WAVEFORM WITH LOOP VISUAL */}
+          {/* AUDIO WAVEFORM */}
           {media.media_type === "audio" && (
             <div className="w-full px-4 md:px-12">
               <div className="relative w-full">
@@ -445,7 +448,7 @@ export default function PracticeStudio({
               </button>
             </div>
 
-            {/* ROW 2: SCRUBBER (Video Only - Audio uses WaveSurfer) */}
+            {/* ROW 2: SCRUBBER (Video Only) */}
             {media.media_type === "video" && (
               <div className="mb-4 relative h-2 group/scrubber">
                 {/* 1. Track Background */}
@@ -477,7 +480,7 @@ export default function PracticeStudio({
                   ))}
                 </div>
 
-                {/* 4. The Interactive Input */}
+                {/* 4. Interactive Input */}
                 <input
                   type="range"
                   min="0"
@@ -561,7 +564,7 @@ export default function PracticeStudio({
             </div>
           </div>
 
-          {/* --- NEW TAB BAR --- */}
+          {/* --- TABS --- */}
           <div className="flex border-b border-zinc-800 shrink-0 bg-zinc-900">
             <button
               onClick={() => setActiveTab("bookmarks")}
@@ -585,11 +588,12 @@ export default function PracticeStudio({
             </button>
           </div>
 
-          {/* --- CONTENT AREA --- */}
+          {/* --- TAB CONTENT AREA --- */}
           <div className="flex-1 overflow-y-auto p-4 pb-20 md:pb-4 relative z-0">
             {/* VIEW 1: BOOKMARKS */}
             {activeTab === "bookmarks" && (
               <>
+                {/* --- A. ADD BOOKMARK FORM --- */}
                 {isAddingMark && (
                   <div className="mb-4 bg-zinc-950 p-3 rounded-lg border border-indigo-500/50 animate-in fade-in slide-in-from-top-2">
                     <input
@@ -601,7 +605,7 @@ export default function PracticeStudio({
                       className="w-full bg-zinc-900 border border-zinc-800 rounded p-2 text-sm text-white mb-2 focus:border-indigo-500 outline-none"
                     />
 
-                    {/* ROLE BASED PUBLIC TOGGLE */}
+                    {/* TEACHER TOGGLE (Only visible to Admins/Teachers) */}
                     {(userRole === "teacher" || userRole === "admin") && (
                       <div
                         onClick={() => setIsNewMarkPublic(!isNewMarkPublic)}
@@ -639,7 +643,7 @@ export default function PracticeStudio({
                   </div>
                 )}
 
-                {/* LOOP STATUS */}
+                {/* --- B. LOOP STATUS --- */}
                 {activeLoopId && (
                   <div className="mb-3 px-3 py-3 bg-indigo-900/20 border border-indigo-500/30 rounded-lg flex flex-col gap-3 animate-in fade-in">
                     <div className="flex items-center justify-between">
@@ -673,104 +677,20 @@ export default function PracticeStudio({
                   </div>
                 )}
 
-                {/* EMPTY STATE */}
-                {bookmarks.length === 0 && !isAddingMark && (
-                  <div className="text-zinc-600 text-sm text-center italic mt-8 p-4 border border-dashed border-zinc-800 rounded-lg">
-                    No bookmarks yet. <br /> Tap "Mark" to save a spot.
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  {bookmarks.map((mark) => {
-                    const isLooping = activeLoopId === mark.id;
-                    const isOwner = mark.user_id === currentUserId;
-                    const isPublic = mark.is_public;
-
-                    return (
-                      <div
-                        key={mark.id}
-                        className={`w-full flex items-center justify-between p-3 border rounded-lg transition-all group relative overflow-hidden ${
-                          isLooping
-                            ? "bg-indigo-900/10 border-indigo-500/50"
-                            : "bg-zinc-950 border-zinc-800 hover:bg-zinc-800"
-                        }`}
-                      >
-                        {/* Public Strip Indicator */}
-                        {isPublic && (
-                          <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-500" />
-                        )}
-
-                        <div
-                          className="flex items-center gap-3 flex-1 cursor-pointer min-w-0"
-                          onClick={() => jumpTo(mark.start_time)}
-                        >
-                          <div
-                            className={`font-mono text-xs font-bold px-2 py-1 rounded shrink-0 ${
-                              isLooping
-                                ? "bg-indigo-500 text-white"
-                                : "bg-zinc-800 text-zinc-400"
-                            }`}
-                          >
-                            {formatTime(mark.start_time)}
-                          </div>
-
-                          <div className="flex flex-col min-w-0">
-                            <span
-                              className={`text-sm font-medium truncate ${
-                                isPublic ? "text-amber-100" : "text-zinc-300"
-                              }`}
-                            >
-                              {mark.note}
-                            </span>
-                            {isPublic && (
-                              <span className="text-[10px] text-amber-500 font-bold uppercase tracking-wider flex items-center gap-1">
-                                <Globe size={10} /> Teacher Note
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-1 pl-2">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleBookmarkLoop(mark);
-                            }}
-                            className={`p-2 rounded-lg transition-colors ${
-                              isLooping
-                                ? "text-indigo-400 bg-indigo-400/10"
-                                : "text-zinc-600 hover:text-white hover:bg-zinc-700"
-                            }`}
-                            title="Loop this section"
-                          >
-                            <Repeat size={16} />
-                          </button>
-
-                          {/* Delete Button: ONLY if I own it */}
-                          {isOwner && (
-                            <button
-                              onClick={(e) => handleDeleteBookmark(mark.id, e)}
-                              className="p-2 text-zinc-600 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          )}
-
-                          {/* Read-Only Lock for students viewing teacher notes */}
-                          {!isOwner && isPublic && (
-                            <div className="p-2 text-zinc-700">
-                              <Lock size={16} />
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                {/* --- C. THE LIST (Refactored) --- */}
+                <BookmarkList
+                  bookmarks={bookmarks}
+                  currentUserId={currentUserId}
+                  activeLoopId={activeLoopId}
+                  onJump={(time) => jumpTo(time)}
+                  onLoop={(mark) => toggleBookmarkLoop(mark)}
+                  onDelete={(id) => handleDeleteBookmark(id)}
+                  formatTime={formatTime}
+                />
               </>
             )}
 
-            {/* VIEW 2: COMMENTS (NEW) */}
+            {/* VIEW 2: COMMENTS */}
             {activeTab === "comments" && (
               <div className="animate-in fade-in slide-in-from-right-4 duration-300">
                 <CommentSection

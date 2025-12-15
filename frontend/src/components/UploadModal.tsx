@@ -70,18 +70,23 @@ export default function UploadModal({
     setMessage(null);
 
     try {
+      // 1. GET THE SESSION TOKEN
       const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error("User not found");
+        data: { session },
+      } = await supabase.auth.getSession();
+      const token = session?.access_token;
 
-      // 1. Prepare File for Python Backend
+      if (!token) throw new Error("You must be logged in to upload.");
+
       const formData = new FormData();
       formData.append("file", file);
 
-      // 2. Send to Python for Conversion
+      // 2. SEND TOKEN IN HEADERS
       const response = await fetch("http://127.0.0.1:8000/upload/convert", {
         method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`, // <--- THIS IS NEW
+        },
         body: formData,
       });
 

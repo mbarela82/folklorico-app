@@ -146,6 +146,49 @@ export function useAnnouncement() {
   });
 }
 
+export function useEvents() {
+  return useQuery({
+    queryKey: ["events"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("events")
+        .select("*")
+        .order("start_time", { ascending: true }); // Earliest events first
+
+      if (error) throw error;
+      return data || [];
+    },
+  });
+}
+
+export async function createEvent(eventData: any) {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+
+  const { error } = await supabase.from("events").insert({
+    ...eventData,
+    created_by: user.id,
+  });
+
+  if (error) throw error;
+}
+
+export async function updateEvent(eventId: string, updates: any) {
+  const { error } = await supabase
+    .from("events")
+    .update(updates)
+    .eq("id", eventId);
+
+  if (error) throw error;
+}
+
+export async function deleteEvent(eventId: string) {
+  const { error } = await supabase.from("events").delete().eq("id", eventId);
+  if (error) throw error;
+}
+
 export async function postAnnouncement(message: string, userId: string) {
   const { error } = await supabase
     .from("announcements")

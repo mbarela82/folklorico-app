@@ -1,11 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { Layers, User, Music, Video, ArrowRight, Upload } from "lucide-react";
+import {
+  Layers,
+  User,
+  Music,
+  Video,
+  ArrowRight,
+  Upload,
+  Calendar as CalIcon,
+  MapPin,
+  Clock,
+} from "lucide-react";
 import { useState } from "react";
+import { format, parseISO } from "date-fns"; // <--- Import date-fns
 
 // Hooks
-import { useProfile, useRecentMedia } from "@/hooks/useTroupeData";
+import { useProfile, useRecentMedia, useEvents } from "@/hooks/useTroupeData"; // <--- Added useEvents
 
 // Components
 import AnnouncementBanner from "@/components/AnnouncementBanner";
@@ -20,11 +31,17 @@ type MediaItem = Database["public"]["Tables"]["media_items"]["Row"];
 export default function Dashboard() {
   const { data: profile } = useProfile();
   const { data: recentMedia = [] } = useRecentMedia();
+  const { data: allEvents = [] } = useEvents(); // <--- Fetch Events
 
   const [currentMedia, setCurrentMedia] = useState<MediaItem | null>(null);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
 
   const isAdmin = profile?.role === "admin" || profile?.role === "teacher";
+
+  // FILTER: Only show future events, limited to next 3
+  const upcomingEvents = allEvents
+    .filter((event: any) => new Date(event.start_time) >= new Date())
+    .slice(0, 3);
 
   return (
     <main className="flex-1 w-full p-4 md:p-8 overflow-y-auto pb-24 md:pb-8">
@@ -39,7 +56,7 @@ export default function Dashboard() {
       <UploadModal
         isOpen={isUploadOpen}
         onClose={() => setIsUploadOpen(false)}
-        onUploadSuccess={() => {}} // React Query handles the refresh
+        onUploadSuccess={() => {}}
       />
 
       {/* --- MOBILE BRAND HEADER --- */}
@@ -66,8 +83,8 @@ export default function Dashboard() {
         </Link>
       </div>
 
-      {/* 1. WELCOME & ANNOUNCEMENT */}
       <div className="max-w-5xl mx-auto space-y-8">
+        {/* 1. WELCOME & ANNOUNCEMENT */}
         <div className="space-y-4">
           <h2 className="text-2xl font-bold text-white px-1">
             Hola,{" "}
@@ -138,13 +155,72 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* 3. JUST IN (Compact List) */}
+        {/* 3. UPCOMING EVENTS (NEW SECTION) */}
+        <div>
+          <div className="flex items-center justify-between mb-3 px-1">
+            <h3 className="text-zinc-500 text-xs font-bold uppercase">
+              Upcoming Events
+            </h3>
+            <Link
+              href="/calendar"
+              className="text-xs font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
+            >
+              View Calendar <ArrowRight size={12} />
+            </Link>
+          </div>
+
+          {upcomingEvents.length === 0 ? (
+            <div className="text-zinc-600 text-sm italic px-1 p-4 border border-zinc-900 rounded-xl bg-zinc-900/30">
+              No upcoming events scheduled.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {upcomingEvents.map((event: any) => {
+                const startDate = parseISO(event.start_time);
+                return (
+                  <Link
+                    key={event.id}
+                    href="/calendar"
+                    className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 p-3 rounded-xl flex items-start gap-3 transition-colors group"
+                  >
+                    {/* Date Box */}
+                    <div className="flex flex-col items-center justify-center bg-zinc-950 border border-zinc-800 rounded-lg w-12 h-12 shrink-0 group-hover:border-indigo-500/50 transition-colors">
+                      <span className="text-[10px] font-bold text-indigo-500 uppercase leading-none">
+                        {format(startDate, "MMM")}
+                      </span>
+                      <span className="text-lg font-bold text-white leading-none mt-0.5">
+                        {format(startDate, "d")}
+                      </span>
+                    </div>
+
+                    <div className="min-w-0">
+                      <h4 className="font-bold text-sm text-zinc-200 truncate group-hover:text-white">
+                        {event.title}
+                      </h4>
+                      <div className="flex items-center gap-3 mt-1 text-xs text-zinc-500">
+                        <span className="flex items-center gap-1">
+                          <Clock size={12} /> {format(startDate, "h:mm a")}
+                        </span>
+                        {event.location && (
+                          <span className="flex items-center gap-1 truncate max-w-[80px]">
+                            <MapPin size={12} /> {event.location}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* 4. JUST IN (Compact List) */}
         <div>
           <div className="flex items-center justify-between mb-3 px-1">
             <h3 className="text-zinc-500 text-xs font-bold uppercase">
               Just In
             </h3>
-            {/* Optional 'View All' link could go here */}
           </div>
 
           {recentMedia.length === 0 ? (
@@ -154,7 +230,6 @@ export default function Dashboard() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {recentMedia.slice(0, 3).map((item) => (
-                // Using the existing MediaCard but constrained in a smaller grid
                 <MediaCard
                   key={item.id}
                   title={item.title}

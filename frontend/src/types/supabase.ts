@@ -132,6 +132,38 @@ export interface Database {
           created_at?: string;
         };
       };
+      events: {
+        Row: {
+          id: string;
+          created_at: string;
+          title: string;
+          description: string | null;
+          start_time: string;
+          end_time: string | null;
+          location: string | null;
+          created_by: string;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          title: string;
+          description?: string | null;
+          start_time: string;
+          end_time?: string | null;
+          location?: string | null;
+          created_by: string;
+        };
+        Update: {
+          id?: string;
+          created_at?: string;
+          title?: string;
+          description?: string | null;
+          start_time?: string;
+          end_time?: string | null;
+          location?: string | null;
+          created_by?: string;
+        };
+      };
     };
   };
 }

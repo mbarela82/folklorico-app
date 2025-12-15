@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
   // 1. Initialize the response
+  // We need to create a response object first so we can attach cookies to it later
   let response = NextResponse.next({
     request: {
       headers: request.headers,
@@ -36,7 +37,7 @@ export async function middleware(request: NextRequest) {
   );
 
   // 3. Check Auth Status
-  // We use getUser() because it validates the JWT with the database (secure)
+  // We use getUser() to validate the session against Supabase Auth
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -45,18 +46,21 @@ export async function middleware(request: NextRequest) {
   const url = request.nextUrl.clone();
   const path = url.pathname;
 
-  // Pages that ANYONE can see (Logged in or not)
   const publicPaths = ["/login", "/join-troupe", "/update-password", "/"];
 
-  // Is this page public?
-  const isPublic = publicPaths.includes(path);
+  // ROBUST CHECK: strictly check if the path is exactly one of the public paths
+  // OR if it starts with a public path + slash (e.g. /update-password/some-token)
+  const isPublic = publicPaths.some(
+    (p) => path === p || path.startsWith(`${p}/`)
+  );
 
   // --- SECURITY LOGIC ---
 
   // Scenario A: User is NOT logged in, but tries to visit a private page
   if (!user && !isPublic) {
-    // Redirect to login
     url.pathname = "/login";
+    // Explicitly clear query params so we don't carry over confusing redirect data
+    url.search = "";
     return NextResponse.redirect(url);
   }
 
@@ -68,19 +72,17 @@ export async function middleware(request: NextRequest) {
   }
 
   // Scenario C: User visits Root "/"
-  // If logged in -> Dashboard. If not -> Login.
+  // If logged in -> Dashboard. If not -> Let the Splash Screen (page.tsx) handle it.
   if (path === "/") {
     if (user) {
       url.pathname = "/dashboard";
       return NextResponse.redirect(url);
-    } else {
-      // Let the Splash Screen component handle the visual loading/redirect
-      // or force a redirect here. The splash screen (page.tsx) logic is fine,
-      // so we can just let it pass through.
-      return response;
     }
+    // If no user, we let the request proceed to the Splash Screen (which is public)
+    return response;
   }
 
+  // Allow the request to proceed
   return response;
 }
 
@@ -92,10 +94,8 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
-     * - api/ (API routes - generally we protect these differently, or let them pass
-     * if they have their own auth checks, but usually good to include)
-     * Feel free to modify this to include/exclude specific patterns.
+     * - auth/callback (API routes used for auth exchange)
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|auth/callback|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

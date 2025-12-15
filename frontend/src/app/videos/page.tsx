@@ -4,9 +4,9 @@ import { useState, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { Video, PlusCircle, MapPin, Filter, Layers } from "lucide-react";
-import { useRegions, useMediaLibrary } from "@/hooks/useTroupeData";
+// 1. ADD: useProfile
+import { useRegions, useMediaLibrary, useProfile } from "@/hooks/useTroupeData";
 
-// Components
 import MediaCard from "@/components/MediaCard";
 import PracticeStudio from "@/components/PracticeStudio";
 import UploadModal from "@/components/UploadModal";
@@ -15,9 +15,8 @@ import ConfirmationModal from "@/components/ConfirmationModal";
 import EditMediaForm from "@/components/EditMediaForm";
 import Toast from "@/components/Toast";
 import TagFilterBar from "@/components/TagFilterBar";
-
-// Types
 import { Database } from "@/types/supabase";
+
 type MediaItemWithTags = Database["public"]["Tables"]["media_items"]["Row"] & {
   tags?: string[];
 };
@@ -29,12 +28,16 @@ export default function VideoPage() {
   const [selectedRegion, setSelectedRegion] = useState<string>("All");
   const [filterTag, setFilterTag] = useState<string | null>(null);
 
-  // DATA: Use our new hooks!
+  // DATA
   const { data: regions = [] } = useRegions("video");
   const { data: mediaItems = [], isLoading } = useMediaLibrary(
     "video",
     selectedRegion
   );
+
+  // 2. ADD: Profile Data & Permission Check
+  const { data: profile } = useProfile();
+  const isAdmin = profile?.role === "admin" || profile?.role === "teacher";
 
   // UI State
   const [currentMedia, setCurrentMedia] = useState<MediaItemWithTags | null>(
@@ -50,7 +53,7 @@ export default function VideoPage() {
     type: "success" | "error";
   } | null>(null);
 
-  // Derived State (Tags)
+  // Derived State
   const availableTags = useMemo(() => {
     const allTags = mediaItems.flatMap((item) => item.tags || []);
     return Array.from(new Set(allTags)).sort();
@@ -61,7 +64,6 @@ export default function VideoPage() {
     return item.tags && item.tags.includes(filterTag);
   });
 
-  // Handlers
   const refreshData = () => {
     queryClient.invalidateQueries({ queryKey: ["media", "video"] });
     queryClient.invalidateQueries({ queryKey: ["regions", "video"] });
@@ -183,13 +185,16 @@ export default function VideoPage() {
             </div>
           </div>
 
-          <button
-            onClick={() => setIsUploadOpen(true)}
-            className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-3 rounded-xl font-bold shadow-lg shadow-indigo-500/20 transition-all shrink-0"
-          >
-            <PlusCircle size={20} />
-            <span className="hidden sm:inline">Upload</span>
-          </button>
+          {/* 3. UPDATE: Conditional Upload Button */}
+          {isAdmin && (
+            <button
+              onClick={() => setIsUploadOpen(true)}
+              className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-3 rounded-xl font-bold shadow-lg shadow-indigo-500/20 transition-all shrink-0"
+            >
+              <PlusCircle size={20} />
+              <span className="hidden sm:inline">Upload</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -221,8 +226,9 @@ export default function VideoPage() {
               thumbnailUrl={item.thumbnail_url}
               tags={item.tags}
               onClick={() => setCurrentMedia(item)}
-              onEdit={() => setEditingItem(item)}
-              onDelete={() => setDeleteId(item.id)}
+              // 4. UPDATE: Conditional Edit/Delete
+              onEdit={isAdmin ? () => setEditingItem(item) : undefined}
+              onDelete={isAdmin ? () => setDeleteId(item.id) : undefined}
             />
           ))}
         </div>

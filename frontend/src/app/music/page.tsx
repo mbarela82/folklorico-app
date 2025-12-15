@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useMemo } from "react"; // Removed useEffect
-import { useQueryClient } from "@tanstack/react-query"; // <--- Import this
+import { useState, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { Music, PlusCircle, MapPin, Filter, Layers } from "lucide-react";
-import { useRegions, useMediaLibrary } from "@/hooks/useTroupeData"; // <--- Import Hooks
+// 1. ADD: useProfile to imports
+import { useRegions, useMediaLibrary, useProfile } from "@/hooks/useTroupeData";
 
-// Components
 import MediaCard from "@/components/MediaCard";
 import PracticeStudio from "@/components/PracticeStudio";
 import UploadModal from "@/components/UploadModal";
@@ -15,26 +15,30 @@ import ConfirmationModal from "@/components/ConfirmationModal";
 import EditMediaForm from "@/components/EditMediaForm";
 import Toast from "@/components/Toast";
 import TagFilterBar from "@/components/TagFilterBar";
-
-// Types
 import { Database } from "@/types/supabase";
+
 type MediaItemWithTags = Database["public"]["Tables"]["media_items"]["Row"] & {
   tags?: string[];
 };
 
 export default function MusicPage() {
-  const queryClient = useQueryClient(); // The tool to force-refresh data
+  const queryClient = useQueryClient();
 
   // Filter State
   const [selectedRegion, setSelectedRegion] = useState<string>("All");
   const [filterTag, setFilterTag] = useState<string | null>(null);
 
-  // DATA: Use our new hooks!
+  // DATA HOOKS
   const { data: regions = [] } = useRegions("audio");
   const { data: mediaItems = [], isLoading } = useMediaLibrary(
     "audio",
     selectedRegion
   );
+
+  // 2. ADD: Get Profile Data
+  const { data: profile } = useProfile();
+  // 3. ADD: Check Permissions
+  const isAdmin = profile?.role === "admin" || profile?.role === "teacher";
 
   // UI State
   const [currentMedia, setCurrentMedia] = useState<MediaItemWithTags | null>(
@@ -61,9 +65,7 @@ export default function MusicPage() {
     return item.tags && item.tags.includes(filterTag);
   });
 
-  // Handlers
   const refreshData = () => {
-    // This tells React Query: "The 'media' list is dirty. Fetch it again in background."
     queryClient.invalidateQueries({ queryKey: ["media", "audio"] });
     queryClient.invalidateQueries({ queryKey: ["regions", "audio"] });
   };
@@ -76,7 +78,7 @@ export default function MusicPage() {
       });
       if (!response.ok) throw new Error("Failed to delete media");
 
-      refreshData(); // <--- Refresh Cache
+      refreshData();
       setToast({ msg: "Track deleted successfully", type: "success" });
     } catch (error) {
       console.error(error);
@@ -107,7 +109,7 @@ export default function MusicPage() {
         isOpen={isUploadOpen}
         onClose={() => setIsUploadOpen(false)}
         onUploadSuccess={() => {
-          refreshData(); // <--- Refresh Cache
+          refreshData();
           setToast({ msg: "Upload Complete", type: "success" });
         }}
         defaultType="audio"
@@ -123,7 +125,7 @@ export default function MusicPage() {
             mediaItem={editingItem}
             onSuccess={() => {
               setEditingItem(null);
-              refreshData(); // <--- Refresh Cache
+              refreshData();
               setToast({ msg: "Track Updated", type: "success" });
             }}
             onCancel={() => setEditingItem(null)}
@@ -184,13 +186,16 @@ export default function MusicPage() {
             </div>
           </div>
 
-          <button
-            onClick={() => setIsUploadOpen(true)}
-            className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-3 rounded-xl font-bold shadow-lg shadow-indigo-500/20 transition-all shrink-0"
-          >
-            <PlusCircle size={20} />
-            <span className="hidden sm:inline">Upload</span>
-          </button>
+          {/* 4. UPDATE: Only Show Upload Button if Admin/Teacher */}
+          {isAdmin && (
+            <button
+              onClick={() => setIsUploadOpen(true)}
+              className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-3 rounded-xl font-bold shadow-lg shadow-indigo-500/20 transition-all shrink-0"
+            >
+              <PlusCircle size={20} />
+              <span className="hidden sm:inline">Upload</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -222,8 +227,9 @@ export default function MusicPage() {
               thumbnailUrl={item.thumbnail_url}
               tags={item.tags}
               onClick={() => setCurrentMedia(item)}
-              onEdit={() => setEditingItem(item)}
-              onDelete={() => setDeleteId(item.id)}
+              // 5. UPDATE: Only pass edit/delete handlers if Admin/Teacher
+              onEdit={isAdmin ? () => setEditingItem(item) : undefined}
+              onDelete={isAdmin ? () => setDeleteId(item.id) : undefined}
             />
           ))}
         </div>

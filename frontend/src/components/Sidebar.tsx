@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient";
 import {
   Home,
+  CalendarDays, // <--- New Icon
   Music,
   Video,
   ListMusic,
@@ -13,52 +12,22 @@ import {
   Layers,
   Shield,
 } from "lucide-react";
+import { useProfile } from "@/hooks/useTroupeData";
 
 interface SidebarProps {
   onUpload: () => void;
-  isAdmin?: boolean;
 }
 
 export default function Sidebar({ onUpload }: SidebarProps) {
   const pathname = usePathname();
 
-  // FIX: Revert to standard state to prevent Hydration Error
-  const [role, setRole] = useState<string>("dancer");
-
-  useEffect(() => {
-    // 1. FAST CHECK: specific to the client browser
-    // This runs immediately after the component mounts
-    const cached = localStorage.getItem("sarape_user_role");
-    if (cached) {
-      setRole(cached);
-    }
-
-    // 2. SECURITY CHECK: Verify with database in background
-    const getRole = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (user) {
-        const { data } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", user.id)
-          .single();
-
-        if (data) {
-          // Update state and cache if it changed
-          if (data.role !== cached) {
-            setRole(data.role);
-            localStorage.setItem("sarape_user_role", data.role);
-          }
-        }
-      }
-    };
-    getRole();
-  }, []);
+  // 1. Use the cached profile hook instead of manual fetching
+  const { data: profile } = useProfile();
+  const isAdmin = profile?.role === "admin" || profile?.role === "teacher";
 
   const navItems = [
     { href: "/dashboard", label: "Home", icon: <Home size={20} /> },
+    { href: "/calendar", label: "Calendar", icon: <CalendarDays size={20} /> }, // <--- Added
     { href: "/music", label: "Music", icon: <Music size={20} /> },
     { href: "/videos", label: "Videos", icon: <Video size={20} /> },
     { href: "/playlists", label: "Playlists", icon: <ListMusic size={20} /> },
@@ -66,7 +35,7 @@ export default function Sidebar({ onUpload }: SidebarProps) {
   ];
 
   // Dynamically add Admin Link
-  if (role === "admin") {
+  if (profile?.role === "admin") {
     navItems.push({
       href: "/admin",
       label: "Admin",

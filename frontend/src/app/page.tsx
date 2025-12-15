@@ -3,65 +3,69 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import Link from "next/link";
-import { ArrowRight, Layers } from "lucide-react"; // Swapped icon to Layers (weaving concept)
+import { Layers } from "lucide-react";
 
 export default function RootPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
+  const [statusText, setStatusText] = useState("Loading Studio...");
 
   useEffect(() => {
-    const checkSession = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session) {
-        router.push("/dashboard");
+    const handleNavigation = async () => {
+      // 1. Initial artificial delay (for smooth visuals)
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      setStatusText("Verifying Session...");
+
+      // 2. Check Session
+      const { data } = await supabase.auth.getSession();
+
+      // 3. Navigate
+      if (data.session) {
+        setStatusText("Opening Dashboard...");
+        setTimeout(() => router.replace("/dashboard"), 500);
       } else {
-        setLoading(false);
+        router.replace("/login");
       }
     };
-    checkSession();
+
+    handleNavigation();
   }, [router]);
 
-  if (loading) return null;
-
   return (
-    <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center text-white p-6 relative overflow-hidden">
-      {/* Background Decor */}
-      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none opacity-20">
-        <div className="absolute -top-20 -left-20 w-96 h-96 bg-indigo-600 rounded-full blur-[120px]"></div>
-        <div className="absolute bottom-0 right-0 w-80 h-80 bg-purple-600 rounded-full blur-[100px]"></div>
-      </div>
-
-      <div className="max-w-lg text-center space-y-8 relative z-10">
-        {/* Logo Icon */}
-        <div className="w-24 h-24 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center mx-auto shadow-2xl shadow-indigo-500/20 rotate-3 transition-transform hover:rotate-6">
-          <Layers size={48} className="text-white" />
+    <div className="min-h-screen bg-zinc-950 flex flex-col items-center relative overflow-hidden font-sans text-white">
+      {/* 1. CENTER CONTENT (Logo + Brand) */}
+      <div className="flex-1 flex flex-col items-center justify-center gap-6 w-full max-w-sm animate-in zoom-in-95 duration-700 fade-in">
+        {/* Icon Box */}
+        <div className="w-24 h-24 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-3xl flex items-center justify-center shadow-2xl shadow-indigo-500/20 mb-2">
+          <Layers size={48} className="text-white fill-white/20" />
         </div>
 
-        <div>
-          <h1 className="text-5xl font-extrabold tracking-tight mb-4">
-            Sarape
-          </h1>
-          <p className="text-zinc-400 text-lg leading-relaxed">
-            Weave your music, video, and choreography into one seamless
-            performance. The essential tool for your dance troupe.
+        {/* Brand Name */}
+        <h1 className="text-4xl font-black tracking-widest uppercase">
+          Sarape
+        </h1>
+
+        {/* Loading Indicator (The 3 Dots) */}
+        <div className="flex flex-col items-center gap-3 mt-4">
+          <div className="flex gap-2">
+            <div className="w-2.5 h-2.5 bg-indigo-500 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+            <div className="w-2.5 h-2.5 bg-purple-500 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+            <div className="w-2.5 h-2.5 bg-indigo-500 rounded-full animate-bounce"></div>
+          </div>
+          <p className="text-zinc-500 text-xs font-bold uppercase tracking-wide animate-pulse">
+            {statusText}
           </p>
         </div>
+      </div>
 
-        <div className="pt-4">
-          <Link
-            href="/login"
-            className="inline-flex items-center gap-3 bg-white text-zinc-950 px-8 py-4 rounded-xl font-bold text-lg hover:bg-zinc-200 transition-all hover:scale-105 shadow-xl"
-          >
-            Open Studio <ArrowRight size={20} />
-          </Link>
-        </div>
-
-        <div className="pt-12 text-xs text-zinc-600 font-mono uppercase tracking-widest">
-          sarape.app
-        </div>
+      {/* 2. FOOTER (Bottom Text) */}
+      <div className="pb-12 text-center opacity-0 animate-in slide-in-from-bottom-4 fade-in duration-1000 delay-500 fill-mode-forwards">
+        <p className="text-zinc-600 text-xs font-medium">
+          Folklorico Practice Companion
+        </p>
+        <p className="text-zinc-800 text-[10px] mt-1 font-mono">
+          v1.0.0 • Secure Environment
+        </p>
       </div>
     </div>
   );

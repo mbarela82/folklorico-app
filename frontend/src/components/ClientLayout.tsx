@@ -13,17 +13,16 @@ export default function ClientLayout({
 }) {
   const [queryClient] = useState(() => new QueryClient());
   const pathname = usePathname();
-  const isLoginPage = pathname === "/login";
+
+  // Define pages that should be "Fullscreen" (No Sidebar/Nav)
+  const publicPages = ["/", "/login", "/join-troupe", "/update-password"];
+  const isPublicPage = publicPages.includes(pathname);
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* NUCLEAR FIX: fixed inset-0 
-         This pins the app to the 4 corners of the viewport.
-         It stops the browser from messing with the height calculation. 
-      */}
       <div className="fixed inset-0 flex w-full bg-zinc-950 text-white overflow-hidden">
-        {/* Desktop Sidebar (Hidden on mobile via CSS inside the component) */}
-        {!isLoginPage && <Sidebar />}
+        {/* Desktop Sidebar (Hidden on public pages) */}
+        {!isPublicPage && <Sidebar onUpload={() => {}} />}
 
         {/* Main Content Area */}
         <div className="flex-1 flex flex-col h-full relative w-full isolate">
@@ -32,9 +31,8 @@ export default function ClientLayout({
             {children}
           </main>
 
-          {/* MOBILE NAVBAR */}
-          {!isLoginPage && (
-            // Absolute positioning with high Z-index to float over the scroll area
+          {/* MOBILE NAVBAR (Hidden on public pages) */}
+          {!isPublicPage && (
             <div className="md:hidden absolute bottom-0 left-0 w-full z-50">
               <MobileNav onUpload={() => {}} />
             </div>
