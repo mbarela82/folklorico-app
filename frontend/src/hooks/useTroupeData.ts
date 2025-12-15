@@ -130,12 +130,17 @@ export function useAnnouncement() {
   return useQuery({
     queryKey: ["announcement"],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("announcements")
-        .select("*, profiles(display_name)") // Join to get author name
+        .select("*, profiles(display_name)")
         .order("created_at", { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle(); // <--- Changed from .single() to .maybeSingle()
+
+      if (error) {
+        console.error("Error fetching announcement:", error);
+      }
+
       return data;
     },
   });

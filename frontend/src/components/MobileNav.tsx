@@ -16,14 +16,12 @@ export default function MobileNav({ onUpload }: MobileNavProps) {
   const { data: profile } = useProfile();
   const isAdmin = profile?.role === "admin";
 
-  // 2. Streamlined Navigation (No Home, No Upload)
   const navItems = [
     { href: "/music", label: "Music", icon: <Music size={20} /> },
     { href: "/videos", label: "Videos", icon: <Video size={20} /> },
     { href: "/playlists", label: "Lists", icon: <ListMusic size={20} /> },
   ];
 
-  // 3. Add Admin Link if authorized
   if (isAdmin) {
     navItems.push({
       href: "/admin",
@@ -32,7 +30,6 @@ export default function MobileNav({ onUpload }: MobileNavProps) {
     });
   }
 
-  // 4. Profile is always last
   navItems.push({
     href: "/profile",
     label: "Profile",
@@ -40,7 +37,9 @@ export default function MobileNav({ onUpload }: MobileNavProps) {
   });
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-zinc-950/90 backdrop-blur-lg border-t border-zinc-800 pb-safe z-50">
+    // FIX: Removed 'fixed bottom-0 left-0 right-0'.
+    // We strictly use 'w-full' because ClientLayout is already pinning this component to the bottom.
+    <nav className="md:hidden w-full bg-zinc-950/90 backdrop-blur-lg border-t border-zinc-800 pb-safe z-50">
       <div className="flex items-center justify-around p-2">
         {navItems.map((item) => {
           const isActive = pathname === item.href;

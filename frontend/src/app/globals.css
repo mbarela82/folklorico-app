@@ -12,6 +12,15 @@
   }
 }
 
+/* --- THE MOBILE FIX --- */
+html,
+body {
+  height: 100%; /* Force full height */
+  overflow: hidden; /* Stop the window itself from scrolling */
+  overscroll-behavior-y: none; /* Kill the rubber-band bounce on iOS */
+  -webkit-overflow-scrolling: touch;
+}
+
 body {
   color: var(--foreground);
   background: var(--background);

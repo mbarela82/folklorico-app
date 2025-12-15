@@ -16,10 +16,12 @@ import {
   FlipHorizontal,
   Gauge,
   Repeat,
-  Globe, // New
-  Lock, // New
+  Globe,
+  Lock,
+  MessageSquare, // <-- Added for the Tab Icon
 } from "lucide-react";
 import WaveSurfer from "wavesurfer.js";
+import CommentSection from "@/components/CommentSection"; // <-- Added Component
 
 import { Database } from "@/types/supabase";
 type MediaItem = Database["public"]["Tables"]["media_items"]["Row"];
@@ -76,7 +78,12 @@ export default function PracticeStudio({
   const [bookmarks, setBookmarks] = useState<BookmarkItem[]>([]);
   const [isAddingMark, setIsAddingMark] = useState(false);
   const [newMarkNote, setNewMarkNote] = useState("");
-  const [isNewMarkPublic, setIsNewMarkPublic] = useState(false); // New Toggle
+  const [isNewMarkPublic, setIsNewMarkPublic] = useState(false);
+
+  // --- NEW: TAB STATE ---
+  const [activeTab, setActiveTab] = useState<"bookmarks" | "comments">(
+    "bookmarks"
+  );
 
   // 1. Initialize Player & User
   useEffect(() => {
@@ -378,7 +385,7 @@ export default function PracticeStudio({
                 onEnded={() => setIsPlaying(false)}
                 onClick={togglePlay}
               />
-              <div className="absolute bottom-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="absolute bottom-4 right-4 flex gap-2 opacity-100 group-hover:opacity-100 transition-opacity">
                 <button
                   onClick={() => setIsMirrored(!isMirrored)}
                   className={`p-2 rounded-lg ${
@@ -470,7 +477,7 @@ export default function PracticeStudio({
                   ))}
                 </div>
 
-                {/* 4. The Interactive Input (Transparent Background) */}
+                {/* 4. The Interactive Input */}
                 <input
                   type="range"
                   min="0"
@@ -554,185 +561,224 @@ export default function PracticeStudio({
             </div>
           </div>
 
-          {/* LIST */}
-          <div className="flex-1 overflow-y-auto p-4 pb-20 md:pb-4 relative z-0">
-            {isAddingMark && (
-              <div className="mb-4 bg-zinc-950 p-3 rounded-lg border border-indigo-500/50 animate-in fade-in slide-in-from-top-2">
-                <input
-                  autoFocus
-                  type="text"
-                  placeholder="Note..."
-                  value={newMarkNote}
-                  onChange={(e) => setNewMarkNote(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded p-2 text-sm text-white mb-2 focus:border-indigo-500 outline-none"
-                />
+          {/* --- NEW TAB BAR --- */}
+          <div className="flex border-b border-zinc-800 shrink-0 bg-zinc-900">
+            <button
+              onClick={() => setActiveTab("bookmarks")}
+              className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 border-b-2 transition-colors ${
+                activeTab === "bookmarks"
+                  ? "border-indigo-500 text-white bg-zinc-800"
+                  : "border-transparent text-zinc-500 hover:text-zinc-300"
+              }`}
+            >
+              <Bookmark size={14} /> Bookmarks
+            </button>
+            <button
+              onClick={() => setActiveTab("comments")}
+              className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 border-b-2 transition-colors ${
+                activeTab === "comments"
+                  ? "border-indigo-500 text-white bg-zinc-800"
+                  : "border-transparent text-zinc-500 hover:text-zinc-300"
+              }`}
+            >
+              <MessageSquare size={14} /> Comments
+            </button>
+          </div>
 
-                {/* ROLE BASED PUBLIC TOGGLE */}
-                {(userRole === "teacher" || userRole === "admin") && (
-                  <div
-                    onClick={() => setIsNewMarkPublic(!isNewMarkPublic)}
-                    className="flex items-center gap-2 mb-3 cursor-pointer text-xs font-bold text-zinc-400 hover:text-white"
-                  >
-                    <div
-                      className={`w-4 h-4 border rounded flex items-center justify-center ${
-                        isNewMarkPublic
-                          ? "bg-amber-500 border-amber-500"
-                          : "border-zinc-600"
-                      }`}
-                    >
-                      {isNewMarkPublic && (
-                        <div className="w-2 h-2 bg-black rounded-sm" />
-                      )}
+          {/* --- CONTENT AREA --- */}
+          <div className="flex-1 overflow-y-auto p-4 pb-20 md:pb-4 relative z-0">
+            {/* VIEW 1: BOOKMARKS */}
+            {activeTab === "bookmarks" && (
+              <>
+                {isAddingMark && (
+                  <div className="mb-4 bg-zinc-950 p-3 rounded-lg border border-indigo-500/50 animate-in fade-in slide-in-from-top-2">
+                    <input
+                      autoFocus
+                      type="text"
+                      placeholder="Note..."
+                      value={newMarkNote}
+                      onChange={(e) => setNewMarkNote(e.target.value)}
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded p-2 text-sm text-white mb-2 focus:border-indigo-500 outline-none"
+                    />
+
+                    {/* ROLE BASED PUBLIC TOGGLE */}
+                    {(userRole === "teacher" || userRole === "admin") && (
+                      <div
+                        onClick={() => setIsNewMarkPublic(!isNewMarkPublic)}
+                        className="flex items-center gap-2 mb-3 cursor-pointer text-xs font-bold text-zinc-400 hover:text-white"
+                      >
+                        <div
+                          className={`w-4 h-4 border rounded flex items-center justify-center ${
+                            isNewMarkPublic
+                              ? "bg-amber-500 border-amber-500"
+                              : "border-zinc-600"
+                          }`}
+                        >
+                          {isNewMarkPublic && (
+                            <div className="w-2 h-2 bg-black rounded-sm" />
+                          )}
+                        </div>
+                        <span>Make Public (Teacher Note)</span>
+                      </div>
+                    )}
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleSaveBookmark}
+                        className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs py-2 rounded font-medium"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={() => setIsAddingMark(false)}
+                        className="px-3 bg-zinc-800 text-zinc-400 hover:text-white text-xs py-2 rounded"
+                      >
+                        Cancel
+                      </button>
                     </div>
-                    <span>Make Public (Teacher Note)</span>
                   </div>
                 )}
 
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleSaveBookmark}
-                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs py-2 rounded font-medium"
-                  >
-                    Save
-                  </button>
-                  <button
-                    onClick={() => setIsAddingMark(false)}
-                    className="px-3 bg-zinc-800 text-zinc-400 hover:text-white text-xs py-2 rounded"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* LOOP STATUS */}
-            {activeLoopId && (
-              <div className="mb-3 px-3 py-3 bg-indigo-900/20 border border-indigo-500/30 rounded-lg flex flex-col gap-3 animate-in fade-in">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-indigo-300 text-xs font-bold uppercase tracking-wider">
-                    <Repeat size={14} className="animate-spin-slow" /> Looping
-                    Section
-                  </div>
-                  <button
-                    onClick={clearLoop}
-                    className="text-zinc-400 hover:text-white bg-black/20 p-1 rounded-full"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-                {/* Duration Buttons: Reverted to 5, 10, 15, 20 */}
-                <div className="flex gap-2">
-                  {[5, 10, 15, 20].map((sec) => (
-                    <button
-                      key={sec}
-                      onClick={() => updateLoopDuration(sec)}
-                      className={`flex-1 py-1.5 text-[10px] font-bold rounded border transition-colors ${
-                        loopDuration === sec
-                          ? "bg-indigo-600 border-indigo-500 text-white shadow-sm"
-                          : "bg-zinc-900 border-zinc-700 text-zinc-400 hover:text-white hover:bg-zinc-800"
-                      }`}
-                    >
-                      {sec}s
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* EMPTY STATE */}
-            {bookmarks.length === 0 && !isAddingMark && (
-              <div className="text-zinc-600 text-sm text-center italic mt-8 p-4 border border-dashed border-zinc-800 rounded-lg">
-                No bookmarks yet. <br /> Tap "Mark" to save a spot.
-              </div>
-            )}
-
-            <div className="space-y-2">
-              {bookmarks.map((mark) => {
-                const isLooping = activeLoopId === mark.id;
-                const isOwner = mark.user_id === currentUserId;
-                const isPublic = mark.is_public;
-
-                return (
-                  <div
-                    key={mark.id}
-                    className={`w-full flex items-center justify-between p-3 border rounded-lg transition-all group relative overflow-hidden ${
-                      isLooping
-                        ? "bg-indigo-900/10 border-indigo-500/50"
-                        : "bg-zinc-950 border-zinc-800 hover:bg-zinc-800"
-                    }`}
-                  >
-                    {/* Public Strip Indicator */}
-                    {isPublic && (
-                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-500" />
-                    )}
-
-                    <div
-                      className="flex items-center gap-3 flex-1 cursor-pointer min-w-0"
-                      onClick={() => jumpTo(mark.start_time)}
-                    >
-                      <div
-                        className={`font-mono text-xs font-bold px-2 py-1 rounded shrink-0 ${
-                          isLooping
-                            ? "bg-indigo-500 text-white"
-                            : "bg-zinc-800 text-zinc-400"
-                        }`}
-                      >
-                        {formatTime(mark.start_time)}
+                {/* LOOP STATUS */}
+                {activeLoopId && (
+                  <div className="mb-3 px-3 py-3 bg-indigo-900/20 border border-indigo-500/30 rounded-lg flex flex-col gap-3 animate-in fade-in">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-indigo-300 text-xs font-bold uppercase tracking-wider">
+                        <Repeat size={14} className="animate-spin-slow" />{" "}
+                        Looping Section
                       </div>
-
-                      <div className="flex flex-col min-w-0">
-                        <span
-                          className={`text-sm font-medium truncate ${
-                            isPublic ? "text-amber-100" : "text-zinc-300"
+                      <button
+                        onClick={clearLoop}
+                        className="text-zinc-400 hover:text-white bg-black/20 p-1 rounded-full"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                    {/* Duration Buttons */}
+                    <div className="flex gap-2">
+                      {[5, 10, 15, 20].map((sec) => (
+                        <button
+                          key={sec}
+                          onClick={() => updateLoopDuration(sec)}
+                          className={`flex-1 py-1.5 text-[10px] font-bold rounded border transition-colors ${
+                            loopDuration === sec
+                              ? "bg-indigo-600 border-indigo-500 text-white shadow-sm"
+                              : "bg-zinc-900 border-zinc-700 text-zinc-400 hover:text-white hover:bg-zinc-800"
                           }`}
                         >
-                          {mark.note}
-                        </span>
-                        {isPublic && (
-                          <span className="text-[10px] text-amber-500 font-bold uppercase tracking-wider flex items-center gap-1">
-                            <Globe size={10} /> Teacher Note
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1 pl-2">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleBookmarkLoop(mark);
-                        }}
-                        className={`p-2 rounded-lg transition-colors ${
-                          isLooping
-                            ? "text-indigo-400 bg-indigo-400/10"
-                            : "text-zinc-600 hover:text-white hover:bg-zinc-700"
-                        }`}
-                        title="Loop this section"
-                      >
-                        <Repeat size={16} />
-                      </button>
-
-                      {/* Delete Button: ONLY if I own it */}
-                      {isOwner && (
-                        <button
-                          onClick={(e) => handleDeleteBookmark(mark.id, e)}
-                          className="p-2 text-zinc-600 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
-                        >
-                          <Trash2 size={16} />
+                          {sec}s
                         </button>
-                      )}
-
-                      {/* Read-Only Lock for students viewing teacher notes */}
-                      {!isOwner && isPublic && (
-                        <div className="p-2 text-zinc-700">
-                          <Lock size={16} />
-                        </div>
-                      )}
+                      ))}
                     </div>
                   </div>
-                );
-              })}
-            </div>
+                )}
+
+                {/* EMPTY STATE */}
+                {bookmarks.length === 0 && !isAddingMark && (
+                  <div className="text-zinc-600 text-sm text-center italic mt-8 p-4 border border-dashed border-zinc-800 rounded-lg">
+                    No bookmarks yet. <br /> Tap "Mark" to save a spot.
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  {bookmarks.map((mark) => {
+                    const isLooping = activeLoopId === mark.id;
+                    const isOwner = mark.user_id === currentUserId;
+                    const isPublic = mark.is_public;
+
+                    return (
+                      <div
+                        key={mark.id}
+                        className={`w-full flex items-center justify-between p-3 border rounded-lg transition-all group relative overflow-hidden ${
+                          isLooping
+                            ? "bg-indigo-900/10 border-indigo-500/50"
+                            : "bg-zinc-950 border-zinc-800 hover:bg-zinc-800"
+                        }`}
+                      >
+                        {/* Public Strip Indicator */}
+                        {isPublic && (
+                          <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-500" />
+                        )}
+
+                        <div
+                          className="flex items-center gap-3 flex-1 cursor-pointer min-w-0"
+                          onClick={() => jumpTo(mark.start_time)}
+                        >
+                          <div
+                            className={`font-mono text-xs font-bold px-2 py-1 rounded shrink-0 ${
+                              isLooping
+                                ? "bg-indigo-500 text-white"
+                                : "bg-zinc-800 text-zinc-400"
+                            }`}
+                          >
+                            {formatTime(mark.start_time)}
+                          </div>
+
+                          <div className="flex flex-col min-w-0">
+                            <span
+                              className={`text-sm font-medium truncate ${
+                                isPublic ? "text-amber-100" : "text-zinc-300"
+                              }`}
+                            >
+                              {mark.note}
+                            </span>
+                            {isPublic && (
+                              <span className="text-[10px] text-amber-500 font-bold uppercase tracking-wider flex items-center gap-1">
+                                <Globe size={10} /> Teacher Note
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 pl-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleBookmarkLoop(mark);
+                            }}
+                            className={`p-2 rounded-lg transition-colors ${
+                              isLooping
+                                ? "text-indigo-400 bg-indigo-400/10"
+                                : "text-zinc-600 hover:text-white hover:bg-zinc-700"
+                            }`}
+                            title="Loop this section"
+                          >
+                            <Repeat size={16} />
+                          </button>
+
+                          {/* Delete Button: ONLY if I own it */}
+                          {isOwner && (
+                            <button
+                              onClick={(e) => handleDeleteBookmark(mark.id, e)}
+                              className="p-2 text-zinc-600 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
+
+                          {/* Read-Only Lock for students viewing teacher notes */}
+                          {!isOwner && isPublic && (
+                            <div className="p-2 text-zinc-700">
+                              <Lock size={16} />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {/* VIEW 2: COMMENTS (NEW) */}
+            {activeTab === "comments" && (
+              <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+                <CommentSection
+                  resourceId={media.id}
+                  resourceType="media_item"
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>

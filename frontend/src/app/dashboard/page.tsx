@@ -27,7 +27,7 @@ export default function Dashboard() {
   const isAdmin = profile?.role === "admin" || profile?.role === "teacher";
 
   return (
-    <main className="flex-1 p-4 md:p-8 overflow-y-auto h-full pb-24 md:pb-8">
+    <main className="flex-1 w-full p-4 md:p-8 overflow-y-auto pb-24 md:pb-8">
       {currentMedia && (
         <PracticeStudio
           media={currentMedia as any}

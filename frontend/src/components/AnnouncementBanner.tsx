@@ -60,7 +60,7 @@ export default function AnnouncementBanner() {
           {isAdmin && !isEditing && (
             <button
               onClick={startEditing}
-              className="text-zinc-400 hover:text-white p-1 rounded-md transition-colors opacity-0 group-hover:opacity-100"
+              className="text-zinc-400 hover:text-white p-1 rounded-md transition-colors opacity-100 group-hover:opacity-100"
               title="Update Announcement"
             >
               <Edit2 size={14} />

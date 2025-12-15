@@ -1,22 +1,30 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
-import AppShell from "@/components/AppShell";
-import QueryProvider from "@/components/QueryProvider"; // <--- Import this
+import ClientLayout from "@/components/ClientLayout";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
+const inter = Inter({ subsets: ["latin"] });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+export const viewport: Viewport = {
+  themeColor: "#09090b",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
 
 export const metadata: Metadata = {
   title: "Sarape",
-  description: "Folklorico Troupe Manager",
+  description: "Folklorico Practice Companion",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Sarape",
+  },
+  formatDetection: {
+    telephone: false,
+  },
 };
 
 export default function RootLayout({
@@ -26,13 +34,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      {/* FIX: Added h-[100dvh] and overflow-hidden.
+         This effectively "Locks" the window so it can't bounce or resize.
+      */}
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${inter.className} bg-zinc-950 text-zinc-100 antialiased h-[100dvh] w-full overflow-hidden`}
       >
-        {/* Wrap everything in the Memory Bank */}
-        <QueryProvider>
-          <AppShell>{children}</AppShell>
-        </QueryProvider>
+        <ClientLayout>{children}</ClientLayout>
       </body>
     </html>
   );
