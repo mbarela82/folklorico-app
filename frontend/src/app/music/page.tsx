@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react"; // <--- Added useEffect
+import { useSearchParams } from "next/navigation"; // <--- Added useSearchParams
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { Music, PlusCircle, MapPin, Filter, Layers } from "lucide-react";
-// 1. ADD: useProfile to imports
+
 import { useRegions, useMediaLibrary, useProfile } from "@/hooks/useTroupeData";
 
 import MediaCard from "@/components/MediaCard";
@@ -23,6 +24,8 @@ type MediaItemWithTags = Database["public"]["Tables"]["media_items"]["Row"] & {
 
 export default function MusicPage() {
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams(); // <--- 1. Get URL Params
+  const playId = searchParams.get("play");
 
   // Filter State
   const [selectedRegion, setSelectedRegion] = useState<string>("All");
@@ -35,9 +38,7 @@ export default function MusicPage() {
     selectedRegion
   );
 
-  // 2. ADD: Get Profile Data
   const { data: profile } = useProfile();
-  // 3. ADD: Check Permissions
   const isAdmin = profile?.role === "admin" || profile?.role === "teacher";
 
   // UI State
@@ -53,6 +54,17 @@ export default function MusicPage() {
     msg: string;
     type: "success" | "error";
   } | null>(null);
+
+  // --- NEW: DEEP LINKING LOGIC ---
+  // If the URL has ?play=123, find that song and open it automatically
+  useEffect(() => {
+    if (playId && mediaItems.length > 0) {
+      const targetItem = mediaItems.find((item) => item.id === playId);
+      if (targetItem) {
+        setCurrentMedia(targetItem);
+      }
+    }
+  }, [playId, mediaItems]);
 
   // Derived State (Tags)
   const availableTags = useMemo(() => {
@@ -73,6 +85,7 @@ export default function MusicPage() {
   const handleDelete = async () => {
     if (!deleteId) return;
     try {
+      // NOTE: Ensure your API route handles this, or use the delete function from useTroupeData if available
       const response = await fetch(`http://127.0.0.1:8000/media/${deleteId}`, {
         method: "DELETE",
       });
@@ -88,7 +101,7 @@ export default function MusicPage() {
   };
 
   return (
-    <main className="flex-1 p-4 md:p-8 overflow-y-auto h-full">
+    <main className="flex-1 p-4 md:p-8 overflow-y-auto h-full pb-24 md:pb-8">
       {toast && (
         <Toast
           message={toast.msg}
@@ -100,7 +113,11 @@ export default function MusicPage() {
       {currentMedia && (
         <PracticeStudio
           media={currentMedia as any}
-          onClose={() => setCurrentMedia(null)}
+          onClose={() => {
+            setCurrentMedia(null);
+            // Optional: Remove the query param from URL so refresh doesn't re-open it
+            // router.replace("/music", { scroll: false });
+          }}
         />
       )}
 
@@ -143,18 +160,6 @@ export default function MusicPage() {
         confirmText="Yes, Delete"
       />
 
-      {/* MOBILE HEADER */}
-      <div className="md:hidden flex items-center gap-2 mb-6">
-        <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/30">
-          <Layers size={18} className="text-white" />
-        </div>
-        <Link href="/dashboard">
-          <h1 className="text-xl font-bold tracking-tight text-white">
-            Sarape
-          </h1>
-        </Link>
-      </div>
-
       {/* PAGE HEADER */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-4">
         <div>
@@ -186,7 +191,7 @@ export default function MusicPage() {
             </div>
           </div>
 
-          {/* 4. UPDATE: Only Show Upload Button if Admin/Teacher */}
+          {/* Only Show Upload Button if Admin/Teacher */}
           {isAdmin && (
             <button
               onClick={() => setIsUploadOpen(true)}
@@ -227,7 +232,6 @@ export default function MusicPage() {
               thumbnailUrl={item.thumbnail_url}
               tags={item.tags}
               onClick={() => setCurrentMedia(item)}
-              // 5. UPDATE: Only pass edit/delete handlers if Admin/Teacher
               onEdit={isAdmin ? () => setEditingItem(item) : undefined}
               onDelete={isAdmin ? () => setDeleteId(item.id) : undefined}
             />

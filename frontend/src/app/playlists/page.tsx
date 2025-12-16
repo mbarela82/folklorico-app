@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation"; // <--- Added useSearchParams
 import { supabase } from "@/lib/supabaseClient";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -15,7 +15,6 @@ import {
   User as UserIcon,
 } from "lucide-react";
 import Link from "next/link";
-// FIX: Import useProfile to get the ID instantly from cache
 import { usePlaylists, useProfile } from "@/hooks/useTroupeData";
 
 // Types
@@ -40,6 +39,8 @@ import KebabMenu from "@/components/ui/KebabMenu";
 export default function PlaylistsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams(); // <--- 1. Get URL Params
+  const tabParam = searchParams.get("tab");
 
   // 1. GET DATA FROM CACHE (Instant)
   const { data: rawPlaylists = [], isLoading: listsLoading } = usePlaylists();
@@ -69,12 +70,17 @@ export default function PlaylistsPage() {
 
   // Filter Logic
   const playlists = rawPlaylists as unknown as PlaylistWithData[];
-
-  // FIX: This filter now runs instantly because currentUserId comes from cache
   const myPlaylists = playlists.filter(
     (p) => p.user_id === currentUserId && !p.is_public
   );
   const sharedPlaylists = playlists.filter((p) => p.is_public);
+
+  // --- NEW: AUTO-SWITCH TAB LOGIC ---
+  useEffect(() => {
+    if (tabParam === "shared") {
+      setActiveTab("shared");
+    }
+  }, [tabParam]);
 
   const activeList = activeTab === "mine" ? myPlaylists : sharedPlaylists;
 
@@ -101,6 +107,7 @@ export default function PlaylistsPage() {
 
   const handleDelete = async () => {
     if (!deleteId) return;
+
     const { error } = await supabase
       .from("playlists")
       .delete()
@@ -177,18 +184,6 @@ export default function PlaylistsPage() {
         />
       </Modal>
 
-      {/* MOBILE HEADER */}
-      <div className="md:hidden flex items-center gap-2 mb-6">
-        <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/30">
-          <Layers size={18} className="text-white" />
-        </div>
-        <Link href="/dashboard">
-          <h1 className="text-xl font-bold tracking-tight text-white">
-            Sarape
-          </h1>
-        </Link>
-      </div>
-
       {/* Page Header */}
       <div className="flex items-center justify-between mb-8 gap-4">
         <div>
@@ -255,7 +250,6 @@ export default function PlaylistsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {activeList.map((playlist) => {
             const isOwner = playlist.user_id === currentUserId;
-            // Safely access profile data
             const creatorName = playlist.profiles?.display_name || "Unknown";
             const creatorAvatar = playlist.profiles?.avatar_url;
 

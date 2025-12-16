@@ -1,30 +1,18 @@
-import type { Metadata, Viewport } from "next";
+import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import ClientLayout from "@/components/ClientLayout";
+
+import Sidebar from "@/components/Sidebar";
+import MobileNav from "@/components/MobileNav";
+import MobileHeader from "@/components/MobileHeader";
+import Providers from "@/app/providers";
 
 const inter = Inter({ subsets: ["latin"] });
 
-export const viewport: Viewport = {
-  themeColor: "#09090b",
-  width: "device-width",
-  initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
-};
-
 export const metadata: Metadata = {
-  title: "Sarape",
-  description: "Folklorico Practice Companion",
+  title: "Sarape - Folklorico Companion",
+  description: "Practice and management for the troupe.",
   manifest: "/manifest.json",
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "black-translucent",
-    title: "Sarape",
-  },
-  formatDetection: {
-    telephone: false,
-  },
 };
 
 export default function RootLayout({
@@ -34,13 +22,30 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      {/* FIX: Added h-[100dvh] and overflow-hidden.
-         This effectively "Locks" the window so it can't bounce or resize.
-      */}
-      <body
-        className={`${inter.className} bg-zinc-950 text-zinc-100 antialiased h-[100dvh] w-full overflow-hidden`}
-      >
-        <ClientLayout>{children}</ClientLayout>
+      <body className={inter.className}>
+        <Providers>
+          <div className="flex h-screen bg-zinc-950 text-zinc-200 overflow-hidden">
+            {/* 1. Desktop Sidebar (Left) */}
+            <Sidebar />
+
+            {/* 2. Main Content Wrapper */}
+            <div className="flex-1 flex flex-col h-full relative">
+              {/* Mobile Top Header */}
+              <MobileHeader />
+
+              {/* Scrollable Page Content */}
+              {/* Added pb-24 so content doesn't get cut off by the bottom nav */}
+              <main className="flex-1 overflow-y-auto pb-24 md:pb-0">
+                {children}
+              </main>
+            </div>
+
+            {/* 3. Mobile Bottom Nav (Floating Above Everything) */}
+            <div className="md:hidden fixed bottom-0 left-0 right-0 z-50">
+              <MobileNav />
+            </div>
+          </div>
+        </Providers>
       </body>
     </html>
   );

@@ -319,11 +319,17 @@ export default function PracticeStudio({
   // --- BOOKMARK CRUD ---
   const handleSaveBookmark = async () => {
     if (!media) return;
+
+    // 1. Get User
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) {
+      alert("You must be logged in to save notes.");
+      return;
+    }
 
+    // 2. Attempt Save
     const { error } = await supabase.from("bookmarks").insert({
       media_id: media.id,
       user_id: user.id,
@@ -332,7 +338,11 @@ export default function PracticeStudio({
       is_public: isNewMarkPublic,
     });
 
-    if (!error) {
+    // 3. Handle Result
+    if (error) {
+      console.error("Save Error:", error);
+      alert(`Error saving note: ${error.message}`);
+    } else {
       setIsAddingMark(false);
       setNewMarkNote("");
       setIsNewMarkPublic(false);

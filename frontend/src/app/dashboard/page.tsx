@@ -13,7 +13,7 @@ import {
   Clock,
 } from "lucide-react";
 import { useState } from "react";
-import { format, parseISO } from "date-fns"; // <--- Import date-fns
+import { format, parseISO } from "date-fns";
 
 // Hooks
 import { useProfile, useRecentMedia, useEvents } from "@/hooks/useTroupeData"; // <--- Added useEvents
@@ -58,30 +58,6 @@ export default function Dashboard() {
         onClose={() => setIsUploadOpen(false)}
         onUploadSuccess={() => {}}
       />
-
-      {/* --- MOBILE BRAND HEADER --- */}
-      <div className="md:hidden flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/30">
-            <Layers size={18} className="text-white" />
-          </div>
-          <h1 className="text-xl font-bold tracking-tight text-white">
-            Sarape
-          </h1>
-        </div>
-        <Link href="/profile">
-          {profile?.avatar_url ? (
-            <img
-              src={profile.avatar_url}
-              className="w-8 h-8 rounded-full border border-zinc-700 object-cover"
-            />
-          ) : (
-            <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center border border-zinc-700">
-              <User size={14} className="text-zinc-500" />
-            </div>
-          )}
-        </Link>
-      </div>
 
       <div className="max-w-5xl mx-auto space-y-8">
         {/* 1. WELCOME & ANNOUNCEMENT */}

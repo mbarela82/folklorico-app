@@ -1,4 +1,3 @@
-// frontend/src/hooks/useTroupeData.ts
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -17,7 +16,7 @@ export function useProfile() {
 
       const { data } = await supabase
         .from("profiles")
-        .select("id, display_name, avatar_url, role, email") // Added email for admin view
+        .select("id, display_name, avatar_url, role, email")
         .eq("id", user.id)
         .single();
 
@@ -50,11 +49,13 @@ export function useRegions(mediaType: "audio" | "video") {
         .eq("media_type", mediaType)
         .order("region");
       if (!data) return [];
+
+      // Return unique regions
       return Array.from(
         new Set(data.map((i) => i.region).filter(Boolean) as string[])
       );
     },
-    staleTime: 1000 * 60 * 5,
+    staleTime: 1000 * 60 * 5, // Cache for 5 mins
   });
 }
 
@@ -67,9 +68,13 @@ export function useMediaLibrary(mediaType: "audio" | "video", region: string) {
         .select(`*, media_tags ( tags (name) )`)
         .eq("media_type", mediaType)
         .order("title");
+
       if (region !== "All") query = query.eq("region", region);
+
       const { data, error } = await query;
       if (error) throw error;
+
+      // Flatten tags for easier consumption in UI
       return data.map((item: any) => ({
         ...item,
         tags: item.media_tags.map((mt: any) => mt.tags.name),
@@ -89,7 +94,7 @@ export function usePlaylists() {
           *, 
           playlist_items(count),
           profiles ( display_name, avatar_url )
-        `
+          `
         )
         .order("created_at", { ascending: false });
 
@@ -118,10 +123,13 @@ export function useAnnouncement() {
   });
 }
 
+// === NOTIFICATION LOGIC REMOVED ===
+// The database trigger 'on_announcement_created' now handles this automatically.
 export async function postAnnouncement(message: string, userId: string) {
   const { error } = await supabase
     .from("announcements")
     .insert({ message, author_id: userId });
+
   if (error) throw error;
 }
 
@@ -136,7 +144,7 @@ export function useEvents() {
       const { data, error } = await supabase
         .from("events")
         .select("*")
-        .order("start_time", { ascending: true }); // Earliest events first
+        .order("start_time", { ascending: true });
 
       if (error) throw error;
       return data || [];
@@ -144,6 +152,8 @@ export function useEvents() {
   });
 }
 
+// === NOTIFICATION LOGIC REMOVED ===
+// The database trigger 'on_event_created' now handles this automatically.
 export async function createEvent(eventData: any) {
   const {
     data: { user },
@@ -154,6 +164,7 @@ export async function createEvent(eventData: any) {
     ...eventData,
     created_by: user.id,
   });
+
   if (error) throw error;
 }
 
@@ -174,7 +185,6 @@ export async function deleteEvent(eventId: string) {
 // 3. ADMIN: USER MANAGEMENT
 // ==========================================
 
-// Renamed from useAdminUsers to match AdminPage imports
 export function useAllProfiles() {
   return useQuery({
     queryKey: ["all_profiles"],
@@ -195,16 +205,11 @@ export async function updateRole(userId: string, newRole: string) {
     .from("profiles")
     .update({ role: newRole })
     .eq("id", userId);
-
   if (error) throw error;
 }
 
 export async function deleteUser(userId: string) {
-  // Note: This removes the profile from the public table.
-  // Ideally, you also want to remove them from Auth via an Edge Function,
-  // but this removes them from the App's roster view.
   const { error } = await supabase.from("profiles").delete().eq("id", userId);
-
   if (error) throw error;
 }
 
@@ -212,7 +217,6 @@ export async function deleteUser(userId: string) {
 // 4. ADMIN: TAG MANAGEMENT
 // ==========================================
 
-// Renamed from useAllTags to useTags for consistency
 export function useTags() {
   return useQuery({
     queryKey: ["tags"],

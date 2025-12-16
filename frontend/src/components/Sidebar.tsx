@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Home,
-  CalendarDays, // <--- New Icon
+  CalendarDays,
   Music,
   Video,
   ListMusic,
@@ -13,28 +13,32 @@ import {
   Shield,
 } from "lucide-react";
 import { useProfile } from "@/hooks/useTroupeData";
+import NotificationBell from "@/components/NotificationBell";
 
+// Made prop optional (?) to prevent TypeScript errors in layout.tsx
 interface SidebarProps {
-  onUpload: () => void;
+  onUpload?: () => void;
 }
 
 export default function Sidebar({ onUpload }: SidebarProps) {
   const pathname = usePathname();
-
-  // 1. Use the cached profile hook instead of manual fetching
   const { data: profile } = useProfile();
-  const isAdmin = profile?.role === "admin" || profile?.role === "teacher";
+
+  // 1. HIDE ON PUBLIC PAGES
+  // Add any other public routes here (e.g. /forgot-password)
+  if (["/login", "/join-troupe", "/", "/update-password"].includes(pathname)) {
+    return null;
+  }
 
   const navItems = [
     { href: "/dashboard", label: "Home", icon: <Home size={20} /> },
-    { href: "/calendar", label: "Calendar", icon: <CalendarDays size={20} /> }, // <--- Added
+    { href: "/calendar", label: "Calendar", icon: <CalendarDays size={20} /> },
     { href: "/music", label: "Music", icon: <Music size={20} /> },
     { href: "/videos", label: "Videos", icon: <Video size={20} /> },
     { href: "/playlists", label: "Playlists", icon: <ListMusic size={20} /> },
     { href: "/profile", label: "Profile", icon: <User size={20} /> },
   ];
 
-  // Dynamically add Admin Link
   if (profile?.role === "admin") {
     navItems.push({
       href: "/admin",
@@ -44,16 +48,20 @@ export default function Sidebar({ onUpload }: SidebarProps) {
   }
 
   return (
-    <aside className="hidden md:flex flex-col w-64 bg-zinc-950 border-r border-zinc-800 h-screen sticky top-0 shrink-0">
-      <div className="p-6 flex items-center gap-3">
-        <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/30">
-          <Layers size={18} className="text-white" />
+    <aside className="hidden md:flex flex-col w-64 bg-zinc-950 border-r border-zinc-800 h-screen sticky top-0 shrink-0 z-50">
+      <div className="p-6 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/30">
+            <Layers size={18} className="text-white" />
+          </div>
+          <Link href="/dashboard">
+            <h1 className="text-xl font-bold tracking-tight text-white">
+              Sarape
+            </h1>
+          </Link>
         </div>
-        <Link href="/dashboard">
-          <h1 className="text-xl font-bold tracking-tight text-white">
-            Sarape
-          </h1>
-        </Link>
+
+        <NotificationBell align="left" />
       </div>
 
       <nav className="flex-1 px-4 space-y-2 mt-4">

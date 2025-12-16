@@ -279,18 +279,6 @@ export default function CalendarPage() {
         </div>
       </Modal>
 
-      {/* HEADER */}
-      <div className="md:hidden flex items-center gap-2 mb-6">
-        <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/30">
-          <Layers size={18} className="text-white" />
-        </div>
-        <Link href="/dashboard">
-          <h1 className="text-xl font-bold tracking-tight text-white">
-            Sarape
-          </h1>
-        </Link>
-      </div>
-
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">

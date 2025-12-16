@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react"; // <--- Added useEffect
+import { useSearchParams } from "next/navigation"; // <--- Added useSearchParams
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { Video, PlusCircle, MapPin, Filter, Layers } from "lucide-react";
-// 1. ADD: useProfile
+
 import { useRegions, useMediaLibrary, useProfile } from "@/hooks/useTroupeData";
 
 import MediaCard from "@/components/MediaCard";
@@ -23,6 +24,8 @@ type MediaItemWithTags = Database["public"]["Tables"]["media_items"]["Row"] & {
 
 export default function VideoPage() {
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams(); // <--- 1. Get URL Params
+  const playId = searchParams.get("play");
 
   // Filter State
   const [selectedRegion, setSelectedRegion] = useState<string>("All");
@@ -35,7 +38,6 @@ export default function VideoPage() {
     selectedRegion
   );
 
-  // 2. ADD: Profile Data & Permission Check
   const { data: profile } = useProfile();
   const isAdmin = profile?.role === "admin" || profile?.role === "teacher";
 
@@ -52,6 +54,16 @@ export default function VideoPage() {
     msg: string;
     type: "success" | "error";
   } | null>(null);
+
+  // --- NEW: DEEP LINKING LOGIC ---
+  useEffect(() => {
+    if (playId && mediaItems.length > 0) {
+      const targetItem = mediaItems.find((item) => item.id === playId);
+      if (targetItem) {
+        setCurrentMedia(targetItem);
+      }
+    }
+  }, [playId, mediaItems]);
 
   // Derived State
   const availableTags = useMemo(() => {
@@ -87,7 +99,7 @@ export default function VideoPage() {
   };
 
   return (
-    <main className="flex-1 p-4 md:p-8 overflow-y-auto h-full">
+    <main className="flex-1 p-4 md:p-8 overflow-y-auto h-full pb-24 md:pb-8">
       {toast && (
         <Toast
           message={toast.msg}
@@ -99,7 +111,9 @@ export default function VideoPage() {
       {currentMedia && (
         <PracticeStudio
           media={currentMedia as any}
-          onClose={() => setCurrentMedia(null)}
+          onClose={() => {
+            setCurrentMedia(null);
+          }}
         />
       )}
 
@@ -142,18 +156,6 @@ export default function VideoPage() {
         confirmText="Yes, Delete"
       />
 
-      {/* MOBILE HEADER */}
-      <div className="md:hidden flex items-center gap-2 mb-6">
-        <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/30">
-          <Layers size={18} className="text-white" />
-        </div>
-        <Link href="/dashboard">
-          <h1 className="text-xl font-bold tracking-tight text-white">
-            Sarape
-          </h1>
-        </Link>
-      </div>
-
       {/* PAGE HEADER */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-4">
         <div>
@@ -185,7 +187,7 @@ export default function VideoPage() {
             </div>
           </div>
 
-          {/* 3. UPDATE: Conditional Upload Button */}
+          {/* Conditional Upload Button */}
           {isAdmin && (
             <button
               onClick={() => setIsUploadOpen(true)}
@@ -226,7 +228,6 @@ export default function VideoPage() {
               thumbnailUrl={item.thumbnail_url}
               tags={item.tags}
               onClick={() => setCurrentMedia(item)}
-              // 4. UPDATE: Conditional Edit/Delete
               onEdit={isAdmin ? () => setEditingItem(item) : undefined}
               onDelete={isAdmin ? () => setDeleteId(item.id) : undefined}
             />
