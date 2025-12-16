@@ -1,3 +1,4 @@
+// frontend/src/components/UploadModal.tsx
 "use client";
 
 import { useState, useRef, useEffect } from "react";
@@ -10,6 +11,7 @@ import {
   Music,
   Video,
   Loader2,
+  FileVideo, // Added for better file icon
 } from "lucide-react";
 import TagSelector from "@/components/TagSelector";
 
@@ -30,11 +32,14 @@ export default function UploadModal({
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
   const [region, setRegion] = useState("");
-
-  // New: Tag State
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   const [isUploading, setIsUploading] = useState(false);
+  // NEW: Track upload percentage
+  const [uploadProgress, setUploadProgress] = useState(0);
+  // NEW: Distinguish between "Uploading" and "Converting"
+  const [statusText, setStatusText] = useState("");
+
   const [message, setMessage] = useState<{
     text: string;
     type: "success" | "error";
@@ -48,15 +53,22 @@ export default function UploadModal({
       setFile(null);
       setTitle("");
       setRegion("");
-      setSelectedTags([]); // Reset tags
+      setSelectedTags([]);
       setMessage(null);
       setIsUploading(false);
+      setUploadProgress(0); // Reset
+      setStatusText(""); // Reset
     }
   }, [isOpen, defaultType]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setFile(e.target.files[0]);
+      // Auto-fill title if empty
+      if (!title) {
+        const name = e.target.files[0].name.split(".")[0];
+        setTitle(name.replace(/_/g, " "));
+      }
     }
   };
 
@@ -67,6 +79,8 @@ export default function UploadModal({
     }
 
     setIsUploading(true);
+    setUploadProgress(0);
+    setStatusText("Starting upload...");
     setMessage(null);
 
     try {
@@ -76,27 +90,61 @@ export default function UploadModal({
       } = await supabase.auth.getSession();
       const token = session?.access_token;
 
-      if (!token) throw new Error("You must be logged in to upload.");
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!token || !user) throw new Error("You must be logged in to upload.");
 
       const formData = new FormData();
       formData.append("file", file);
 
-      // 2. SEND TOKEN IN HEADERS
-      const response = await fetch("http://127.0.0.1:8000/upload/convert", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`, // <--- THIS IS NEW
-        },
-        body: formData,
+      // 2. USE XHR INSTEAD OF FETCH (For Progress Tracking)
+      const result = await new Promise<any>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+
+        // Progress Listener
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const percentComplete = Math.round(
+              (event.loaded / event.total) * 100
+            );
+            setUploadProgress(percentComplete);
+
+            if (percentComplete < 100) {
+              setStatusText(`Uploading: ${percentComplete}%`);
+            } else {
+              setStatusText("Processing on Server... (Do not close)");
+            }
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const response = JSON.parse(xhr.responseText);
+              resolve(response);
+            } catch (e) {
+              reject(new Error("Invalid server response"));
+            }
+          } else {
+            // Try to parse error message from server
+            try {
+              const errRes = JSON.parse(xhr.responseText);
+              reject(new Error(errRes.detail || "Upload failed"));
+            } catch {
+              reject(new Error(xhr.statusText || "Upload failed"));
+            }
+          }
+        };
+
+        xhr.onerror = () => reject(new Error("Network Error"));
+
+        xhr.open("POST", "http://127.0.0.1:8000/upload/convert");
+        xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+        xhr.send(formData);
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || "Conversion failed");
-      }
-
-      const result = await response.json();
-
+      // 3. HANDLE SUCCESS RESPONSE
       const finalUrl =
         typeof result.public_url === "string"
           ? result.public_url
@@ -109,7 +157,9 @@ export default function UploadModal({
 
       if (!finalUrl) throw new Error("Failed to retrieve public URL");
 
-      // 3. Save Metadata (And get the new ID)
+      // 4. SAVE TO SUPABASE DB
+      setStatusText("Saving details...");
+
       const { data: mediaData, error: dbError } = await supabase
         .from("media_items")
         .insert({
@@ -121,17 +171,14 @@ export default function UploadModal({
           thumbnail_url: thumbUrl || null,
         })
         .select()
-        .single(); // <--- Important: Get the new row back
+        .single();
 
       if (dbError || !mediaData) throw dbError;
 
-      // 4. Save Tags (if any)
+      // 5. SAVE TAGS
       if (selectedTags.length > 0) {
         for (const tagName of selectedTags) {
-          // A. Find or Create Tag
           let tagId: number | null = null;
-
-          // Check if exists
           const { data: existingTag } = await supabase
             .from("tags")
             .select("id")
@@ -141,7 +188,6 @@ export default function UploadModal({
           if (existingTag) {
             tagId = existingTag.id;
           } else {
-            // Create new
             const { data: newTag } = await supabase
               .from("tags")
               .insert({ name: tagName })
@@ -150,7 +196,6 @@ export default function UploadModal({
             if (newTag) tagId = newTag.id;
           }
 
-          // B. Link Tag to Media
           if (tagId) {
             await supabase.from("media_tags").insert({
               media_id: mediaData.id,
@@ -160,15 +205,18 @@ export default function UploadModal({
         }
       }
 
-      setMessage({ text: "Upload & Conversion successful!", type: "success" });
+      setUploadProgress(100);
+      setStatusText("Complete!");
+      setMessage({ text: "Upload successful!", type: "success" });
 
       setTimeout(() => {
         onUploadSuccess();
         onClose();
-      }, 1500);
+      }, 1000);
     } catch (error: any) {
       console.error(error);
       setMessage({ text: error.message || "Upload failed", type: "error" });
+      setStatusText("");
     } finally {
       setIsUploading(false);
     }
@@ -215,8 +263,12 @@ export default function UploadModal({
         <div className="p-6 space-y-4 overflow-y-auto">
           {/* File Picker */}
           <div
-            onClick={() => fileInputRef.current?.click()}
-            className="border-2 border-dashed border-zinc-700 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer hover:border-indigo-500 hover:bg-zinc-800/50 transition-all group"
+            onClick={() => !isUploading && fileInputRef.current?.click()}
+            className={`border-2 border-dashed border-zinc-700 rounded-xl p-8 flex flex-col items-center justify-center transition-all group ${
+              isUploading
+                ? "opacity-50 cursor-not-allowed"
+                : "cursor-pointer hover:border-indigo-500 hover:bg-zinc-800/50"
+            }`}
           >
             <input
               type="file"
@@ -224,17 +276,28 @@ export default function UploadModal({
               onChange={handleFileChange}
               className="hidden"
               accept={activeTab === "audio" ? "audio/*" : "video/*"}
+              disabled={isUploading}
             />
             {file ? (
               <div className="text-center">
-                <CheckCircle
-                  className="mx-auto mb-2 text-green-500"
-                  size={32}
-                />
+                <div className="mx-auto mb-2 w-10 h-10 bg-indigo-500/20 text-indigo-400 rounded-full flex items-center justify-center">
+                  {activeTab === "video" ? (
+                    <FileVideo size={20} />
+                  ) : (
+                    <Music size={20} />
+                  )}
+                </div>
                 <p className="text-sm font-medium text-white truncate max-w-[200px]">
                   {file.name}
                 </p>
-                <p className="text-xs text-zinc-500 mt-1">Click to change</p>
+                <p className="text-xs text-zinc-500 mt-1">
+                  {(file.size / (1024 * 1024)).toFixed(1)} MB
+                </p>
+                {!isUploading && (
+                  <p className="text-[10px] text-zinc-500 mt-2 uppercase tracking-wide">
+                    Click to change
+                  </p>
+                )}
               </div>
             ) : (
               <div className="text-center text-zinc-500 group-hover:text-zinc-300">
@@ -255,10 +318,11 @@ export default function UploadModal({
               </label>
               <input
                 type="text"
+                disabled={isUploading}
                 placeholder="e.g. El Son de la Negra"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white text-sm focus:border-indigo-500 outline-none transition-colors"
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white text-sm focus:border-indigo-500 outline-none transition-colors disabled:opacity-50"
               />
             </div>
 
@@ -268,49 +332,64 @@ export default function UploadModal({
               </label>
               <input
                 type="text"
+                disabled={isUploading}
                 placeholder="e.g. Jalisco"
                 value={region}
                 onChange={(e) => setRegion(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white text-sm focus:border-indigo-500 outline-none transition-colors"
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white text-sm focus:border-indigo-500 outline-none transition-colors disabled:opacity-50"
               />
             </div>
 
-            {/* Tag Selector */}
             <TagSelector
               selectedTags={selectedTags}
               onChange={setSelectedTags}
+              // You might need to add a 'disabled' prop to TagSelector if you want to lock it too,
+              // but it's not strictly necessary for the upload logic.
             />
           </div>
 
-          {message && (
-            <div
-              className={`p-3 rounded-lg flex items-center gap-2 text-sm ${
-                message.type === "success"
-                  ? "bg-green-500/10 text-green-400"
-                  : "bg-red-500/10 text-red-400"
-              }`}
-            >
-              {message.type === "success" ? (
-                <CheckCircle size={16} />
-              ) : (
-                <AlertCircle size={16} />
-              )}
+          {/* ERROR MESSAGE */}
+          {message && message.type === "error" && (
+            <div className="p-3 rounded-lg flex items-center gap-2 text-sm bg-red-500/10 text-red-400 border border-red-500/20">
+              <AlertCircle size={16} />
               {message.text}
             </div>
           )}
 
-          <button
-            onClick={handleUpload}
-            disabled={isUploading}
-            className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {isUploading ? (
-              <Loader2 className="animate-spin" size={20} />
-            ) : (
+          {/* UPLOAD BUTTON OR PROGRESS BAR */}
+          {isUploading ? (
+            <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-4">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider animate-pulse">
+                  {statusText}
+                </span>
+                <span className="text-xs font-mono text-indigo-400">
+                  {uploadProgress}%
+                </span>
+              </div>
+              {/* Progress Track */}
+              <div className="h-2 w-full bg-zinc-800 rounded-full overflow-hidden">
+                {/* Progress Fill */}
+                <div
+                  className="h-full bg-indigo-600 transition-all duration-300 ease-out"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+              {uploadProgress === 100 && (
+                <p className="text-[10px] text-zinc-500 mt-2 text-center">
+                  Converting media format... this may take a moment.
+                </p>
+              )}
+            </div>
+          ) : (
+            <button
+              onClick={handleUpload}
+              className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20"
+            >
               <Upload size={20} />
-            )}
-            {isUploading ? "Optimizing & Uploading..." : "Upload Media"}
-          </button>
+              Upload Media
+            </button>
+          )}
         </div>
       </div>
     </div>

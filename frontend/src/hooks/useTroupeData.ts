@@ -1,7 +1,11 @@
+// frontend/src/hooks/useTroupeData.ts
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 
-// --- EXISTING HOOKS (Profile, Media, Regions) ---
+// ==========================================
+// 1. CORE DATA HOOKS
+// ==========================================
+
 export function useProfile() {
   return useQuery({
     queryKey: ["profile"],
@@ -13,8 +17,7 @@ export function useProfile() {
 
       const { data } = await supabase
         .from("profiles")
-        // ADDED "id" HERE:
-        .select("id, display_name, avatar_url, role")
+        .select("id, display_name, avatar_url, role, email") // Added email for admin view
         .eq("id", user.id)
         .single();
 
@@ -96,36 +99,6 @@ export function usePlaylists() {
   });
 }
 
-export function useAdminUsers() {
-  return useQuery({
-    queryKey: ["admin_users"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .order("created_at", { ascending: false }); // Optional sort
-
-      if (error) throw error;
-      return data || [];
-    },
-  });
-}
-
-export function useAllTags() {
-  return useQuery({
-    queryKey: ["all_tags"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("tags")
-        .select("*")
-        .order("name");
-
-      if (error) throw error;
-      return data || [];
-    },
-  });
-}
-
 export function useAnnouncement() {
   return useQuery({
     queryKey: ["announcement"],
@@ -135,16 +108,26 @@ export function useAnnouncement() {
         .select("*, profiles(display_name)")
         .order("created_at", { ascending: false })
         .limit(1)
-        .maybeSingle(); // <--- Changed from .single() to .maybeSingle()
+        .maybeSingle();
 
       if (error) {
         console.error("Error fetching announcement:", error);
       }
-
       return data;
     },
   });
 }
+
+export async function postAnnouncement(message: string, userId: string) {
+  const { error } = await supabase
+    .from("announcements")
+    .insert({ message, author_id: userId });
+  if (error) throw error;
+}
+
+// ==========================================
+// 2. EVENT & CALENDAR HOOKS
+// ==========================================
 
 export function useEvents() {
   return useQuery({
@@ -171,7 +154,6 @@ export async function createEvent(eventData: any) {
     ...eventData,
     created_by: user.id,
   });
-
   if (error) throw error;
 }
 
@@ -180,7 +162,6 @@ export async function updateEvent(eventId: string, updates: any) {
     .from("events")
     .update(updates)
     .eq("id", eventId);
-
   if (error) throw error;
 }
 
@@ -189,9 +170,86 @@ export async function deleteEvent(eventId: string) {
   if (error) throw error;
 }
 
-export async function postAnnouncement(message: string, userId: string) {
+// ==========================================
+// 3. ADMIN: USER MANAGEMENT
+// ==========================================
+
+// Renamed from useAdminUsers to match AdminPage imports
+export function useAllProfiles() {
+  return useQuery({
+    queryKey: ["all_profiles"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return data || [];
+    },
+  });
+}
+
+export async function updateRole(userId: string, newRole: string) {
   const { error } = await supabase
-    .from("announcements")
-    .insert({ message, author_id: userId });
+    .from("profiles")
+    .update({ role: newRole })
+    .eq("id", userId);
+
+  if (error) throw error;
+}
+
+export async function deleteUser(userId: string) {
+  // Note: This removes the profile from the public table.
+  // Ideally, you also want to remove them from Auth via an Edge Function,
+  // but this removes them from the App's roster view.
+  const { error } = await supabase.from("profiles").delete().eq("id", userId);
+
+  if (error) throw error;
+}
+
+// ==========================================
+// 4. ADMIN: TAG MANAGEMENT
+// ==========================================
+
+// Renamed from useAllTags to useTags for consistency
+export function useTags() {
+  return useQuery({
+    queryKey: ["tags"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tags")
+        .select("*")
+        .order("name");
+
+      if (error) throw error;
+      return data || [];
+    },
+  });
+}
+
+export async function createTag(name: string) {
+  const { data, error } = await supabase
+    .from("tags")
+    .insert({ name })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateTag(id: number, name: string) {
+  const { data, error } = await supabase
+    .from("tags")
+    .update({ name })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteTag(id: number) {
+  const { error } = await supabase.from("tags").delete().eq("id", id);
   if (error) throw error;
 }

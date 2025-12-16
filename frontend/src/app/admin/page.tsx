@@ -1,17 +1,14 @@
+// frontend/src/app/admin/page.tsx
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Shield,
   User,
   GraduationCap,
-  Layers,
   Search,
   Trash2,
-  UserPlus,
   Check,
   Loader2,
   Tag,
@@ -19,169 +16,162 @@ import {
   Edit2,
   Save,
   X,
+  BarChart3,
+  TrendingUp,
+  Activity,
+  AlertCircle,
+  Link as LinkIcon, // Renamed to avoid conflict if next/link is used, though not used here anymore
 } from "lucide-react";
-import Link from "next/link";
+
+// Hooks
+import {
+  useProfile,
+  useAllProfiles,
+  useTags,
+  updateRole,
+  deleteUser,
+  createTag,
+  deleteTag,
+  updateTag,
+} from "@/hooks/useTroupeData";
+import { useAnalyticsStats } from "@/hooks/useAnalytics";
+
+// Components
 import Toast from "@/components/Toast";
 import ConfirmationModal from "@/components/ConfirmationModal";
-import Modal from "@/components/ui/Modal";
-// Import your reusable KebabMenu
 import KebabMenu from "@/components/ui/KebabMenu";
-import { useAdminUsers, useProfile, useAllTags } from "@/hooks/useTroupeData";
-
-// Types
-import { Database } from "@/types/supabase";
-type Profile = Database["public"]["Tables"]["profiles"]["Row"];
-type TagItem = Database["public"]["Tables"]["tags"]["Row"];
 
 export default function AdminPage() {
-  const router = useRouter();
   const queryClient = useQueryClient();
 
-  // 1. DATA HOOKS
-  const { data: myProfile, isLoading: profileLoading } = useProfile();
-  const { data: users = [], isLoading: usersLoading } = useAdminUsers();
-  const { data: tags = [], isLoading: tagsLoading } = useAllTags();
+  // Data Hooks
+  const { data: currentUser, isLoading: profileLoading } = useProfile();
+  const { data: users = [], isLoading: usersLoading } = useAllProfiles();
+  const { data: tags = [], isLoading: tagsLoading } = useTags();
+  const { data: stats, isLoading: statsLoading } = useAnalyticsStats();
 
-  // 2. UI STATE
-  const [activeTab, setActiveTab] = useState<"members" | "tags">("members");
+  // State
+  const [activeTab, setActiveTab] = useState<"members" | "tags" | "analytics">(
+    "members"
+  );
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Delete State
-  const [deleteId, setDeleteId] = useState<string | number | null>(null);
-  const [deleteType, setDeleteType] = useState<"user" | "tag" | null>(null);
-
-  // Edit Tag State
-  const [editingTag, setEditingTag] = useState<TagItem | null>(null);
+  // Tag Management State
   const [newTagName, setNewTagName] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
+  const [editingTag, setEditingTag] = useState<{
+    id: number;
+    name: string;
+  } | null>(null);
 
-  const [inviteCopied, setInviteCopied] = useState(false);
+  // Modal / Toast State
   const [toast, setToast] = useState<{
     msg: string;
     type: "success" | "error";
   } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    type: "user" | "tag";
+    id: string | number;
+  } | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Security Check
-  if (!profileLoading && myProfile?.role !== "admin") {
-    router.push("/dashboard");
-    return null;
-  }
+  // --- HANDLERS ---
 
-  // --- ACTIONS ---
-
-  const refreshData = () => {
-    queryClient.invalidateQueries({ queryKey: ["admin_users"] });
-    queryClient.invalidateQueries({ queryKey: ["all_tags"] });
-  };
-
-  // 1. USER ACTIONS
-  const updateUserRole = async (
-    userId: string,
-    newRole: "dancer" | "teacher" | "admin"
-  ) => {
-    const { error } = await supabase
-      .from("profiles")
-      .update({ role: newRole })
-      .eq("id", userId);
-    if (error) {
-      setToast({ msg: "Failed to update role", type: "error" });
-    } else {
-      refreshData();
+  const handleRoleChange = async (userId: string, newRole: string) => {
+    try {
+      await updateRole(userId, newRole);
       setToast({ msg: "User role updated", type: "success" });
+      queryClient.invalidateQueries({ queryKey: ["all_profiles"] });
+    } catch (error) {
+      setToast({ msg: "Failed to update role", type: "error" });
     }
   };
 
-  // 2. TAG ACTIONS
-  const openEditTag = (tag: TagItem) => {
-    setEditingTag(tag);
-    setNewTagName(tag.name);
+  const handleDeleteUser = async () => {
+    if (!deleteConfirm || deleteConfirm.type !== "user") return;
+    try {
+      await deleteUser(deleteConfirm.id as string);
+      setToast({ msg: "User removed", type: "success" });
+      queryClient.invalidateQueries({ queryKey: ["all_profiles"] });
+    } catch (error) {
+      setToast({ msg: "Failed to remove user", type: "error" });
+    }
+    setDeleteConfirm(null);
+  };
+
+  const handleCreateTag = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTagName.trim()) return;
+    setIsSubmitting(true);
+    try {
+      await createTag(newTagName);
+      setNewTagName("");
+      setToast({ msg: "Tag created", type: "success" });
+      queryClient.invalidateQueries({ queryKey: ["tags"] });
+    } catch (error) {
+      setToast({ msg: "Error creating tag", type: "error" });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleUpdateTag = async () => {
-    if (!editingTag || !newTagName.trim()) return;
-
-    setIsSaving(true);
-    const { error } = await supabase
-      .from("tags")
-      .update({ name: newTagName.trim() })
-      .eq("id", editingTag.id);
-
-    if (error) {
-      setToast({ msg: "Error updating tag", type: "error" });
-    } else {
-      setToast({ msg: "Tag renamed", type: "success" });
+    if (!editingTag || !editingTag.name.trim()) return;
+    try {
+      await updateTag(editingTag.id, editingTag.name);
       setEditingTag(null);
-      refreshData();
+      setToast({ msg: "Tag renamed", type: "success" });
+      queryClient.invalidateQueries({ queryKey: ["tags"] });
+    } catch (error) {
+      setToast({ msg: "Error updating tag", type: "error" });
     }
-    setIsSaving(false);
   };
 
-  // 3. DELETE ACTIONS
-  const handleDelete = async () => {
-    if (!deleteId) return;
-
-    if (deleteType === "user") {
-      if (deleteId === myProfile?.id) {
-        setToast({ msg: "You cannot delete yourself.", type: "error" });
-        return;
-      }
-      const { error } = await supabase
-        .from("profiles")
-        .delete()
-        .eq("id", deleteId);
-      if (error) setToast({ msg: "Error deleting user", type: "error" });
-      else setToast({ msg: "User removed", type: "success" });
-    } else if (deleteType === "tag") {
-      const { error } = await supabase.from("tags").delete().eq("id", deleteId);
-      if (error) setToast({ msg: "Error deleting tag", type: "error" });
-      else setToast({ msg: "Tag deleted", type: "success" });
+  const handleDeleteTag = async () => {
+    if (!deleteConfirm || deleteConfirm.type !== "tag") return;
+    try {
+      await deleteTag(deleteConfirm.id as number);
+      setToast({ msg: "Tag deleted", type: "success" });
+      queryClient.invalidateQueries({ queryKey: ["tags"] });
+    } catch (error) {
+      setToast({ msg: "Error deleting tag", type: "error" });
     }
-
-    refreshData();
-    setDeleteId(null);
-    setDeleteType(null);
+    setDeleteConfirm(null);
   };
 
-  const confirmDelete = (id: string | number, type: "user" | "tag") => {
-    setDeleteId(id);
-    setDeleteType(type);
+  // Generate and Copy Invite Link
+  const handleInvite = () => {
+    const link = `${window.location.origin}/join-troupe`;
+    navigator.clipboard.writeText(link);
+    setToast({ msg: "Join link copied to clipboard!", type: "success" });
   };
 
-  const handleCopyInvite = () => {
-    const url = `${window.location.origin}/join-troupe`;
-    navigator.clipboard.writeText(url);
-    setInviteCopied(true);
-    setToast({ msg: "Link copied!", type: "success" });
-    setTimeout(() => setInviteCopied(false), 2000);
-  };
+  // --- RENDER ---
 
-  // --- FILTERING ---
+  if (profileLoading)
+    return <div className="p-8 text-zinc-500">Loading profile...</div>;
+
+  if (currentUser?.role !== "admin" && currentUser?.role !== "teacher") {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 h-[50vh]">
+        <Shield size={48} className="mb-4 opacity-20" />
+        <h2 className="text-xl font-bold text-white">Access Denied</h2>
+        <p>You do not have permission to view this area.</p>
+      </div>
+    );
+  }
+
   const filteredUsers = users.filter(
-    (u: Profile) =>
-      (u.display_name?.toLowerCase() || "").includes(
-        searchQuery.toLowerCase()
-      ) || (u.email?.toLowerCase() || "").includes(searchQuery.toLowerCase())
+    (u: any) =>
+      u.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      u.display_name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const filteredTags = tags.filter((t: TagItem) =>
+  const filteredTags = tags.filter((t: any) =>
     t.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const getRoleIcon = (role: string) => {
-    switch (role) {
-      case "admin":
-        return <Shield size={16} className="text-red-400" />;
-      case "teacher":
-        return <GraduationCap size={16} className="text-amber-400" />;
-      default:
-        return <User size={16} className="text-zinc-400" />;
-    }
-  };
-
-  const isLoading = usersLoading || tagsLoading;
-
   return (
-    <main className="flex-1 p-4 md:p-8 overflow-y-auto h-full">
+    <main className="flex-1 p-4 md:p-8 overflow-y-auto h-full pb-24 md:pb-8">
       {toast && (
         <Toast
           message={toast.msg}
@@ -191,95 +181,39 @@ export default function AdminPage() {
       )}
 
       <ConfirmationModal
-        isOpen={!!deleteId}
-        onClose={() => setDeleteId(null)}
-        onConfirm={handleDelete}
-        title={deleteType === "user" ? "Remove Member?" : "Delete Tag?"}
-        message={
-          deleteType === "user"
-            ? "This removes them from the roster."
-            : "This removes the tag from all media items."
+        isOpen={!!deleteConfirm}
+        onClose={() => setDeleteConfirm(null)}
+        onConfirm={
+          deleteConfirm?.type === "user" ? handleDeleteUser : handleDeleteTag
         }
+        title={deleteConfirm?.type === "user" ? "Remove User?" : "Delete Tag?"}
+        message="This action cannot be undone."
         type="danger"
         confirmText="Yes, Delete"
       />
 
-      {/* RENAME TAG MODAL */}
-      <Modal
-        isOpen={!!editingTag}
-        onClose={() => setEditingTag(null)}
-        title="Rename Tag"
-      >
-        <div className="p-6">
-          <div className="mb-4">
-            <label className="block text-xs font-bold text-zinc-500 uppercase mb-1.5 ml-1">
-              Tag Name
-            </label>
-            <input
-              autoFocus
-              type="text"
-              value={newTagName}
-              onChange={(e) => setNewTagName(e.target.value)}
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white focus:border-indigo-500 outline-none transition-colors"
-            />
-          </div>
-          <div className="flex justify-end gap-3">
-            <button
-              onClick={() => setEditingTag(null)}
-              className="px-4 py-2 text-sm text-zinc-400 hover:text-white font-medium"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleUpdateTag}
-              disabled={isSaving || !newTagName.trim()}
-              className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 disabled:opacity-50"
-            >
-              {isSaving ? (
-                <Loader2 className="animate-spin" size={16} />
-              ) : (
-                <Save size={16} />
-              )}
-              Save
-            </button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* HEADER */}
-      <div className="md:hidden flex items-center gap-2 mb-6">
-        <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/30">
-          <Layers size={18} className="text-white" />
-        </div>
-        <Link href="/dashboard">
-          <h1 className="text-xl font-bold text-white">Sarape</h1>
-        </Link>
-      </div>
-
-      <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* HEADER SECTION - Modified for Mobile Stacking and Copy Button */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Shield className="text-indigo-500" /> Admin Dashboard
+            <Shield className="text-indigo-400" /> Admin Dashboard
           </h1>
-          <p className="text-zinc-400 mt-1">Manage your troupe resources.</p>
+          <p className="text-zinc-400">
+            Manage troupe members, content tags, and view stats.
+          </p>
         </div>
 
-        {activeTab === "members" && (
-          <button
-            onClick={handleCopyInvite}
-            className="flex items-center gap-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 px-4 py-2 rounded-xl transition-all font-medium text-sm"
-          >
-            {inviteCopied ? (
-              <Check size={16} className="text-green-500" />
-            ) : (
-              <UserPlus size={16} />
-            )}
-            {inviteCopied ? "Link Copied" : "Invite Dancers"}
-          </button>
-        )}
+        {/* INVITE BUTTON - Copies Link, Matches Tabs Size */}
+        <button
+          onClick={handleInvite}
+          className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg font-bold flex items-center justify-center gap-2 transition-colors text-sm shadow-sm md:w-auto w-full"
+        >
+          <LinkIcon size={16} />
+          Invite User
+        </button>
       </div>
 
-      {/* TABS */}
+      {/* TABS HEADER */}
       <div className="flex gap-1 bg-zinc-900/50 p-1 rounded-xl mb-6 w-fit border border-zinc-800">
         <button
           onClick={() => {
@@ -307,178 +241,422 @@ export default function AdminPage() {
         >
           <Tag size={16} /> Tags
         </button>
+        <button
+          onClick={() => {
+            setActiveTab("analytics");
+            setSearchQuery("");
+          }}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+            activeTab === "analytics"
+              ? "bg-zinc-800 text-white shadow-sm"
+              : "text-zinc-500 hover:text-zinc-300"
+          }`}
+        >
+          <BarChart3 size={16} /> Analytics
+        </button>
       </div>
 
-      {isLoading ? (
-        <div className="h-64 flex flex-col items-center justify-center text-zinc-500 gap-3">
-          <Loader2 className="animate-spin" size={32} />
-          <p>Loading...</p>
+      {activeTab !== "analytics" && (
+        <div className="mb-6 relative max-w-md">
+          <Search
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"
+            size={16}
+          />
+          <input
+            type="text"
+            placeholder={`Search ${activeTab}...`}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-3 pl-10 pr-4 text-white focus:border-indigo-500 outline-none"
+          />
         </div>
-      ) : (
-        <>
-          {/* SEARCH */}
-          <div className="mb-6 flex items-center gap-4">
-            <div className="relative flex-1 max-w-md">
-              <Search
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"
-                size={16}
-              />
-              <input
-                type="text"
-                placeholder={
-                  activeTab === "members"
-                    ? "Search members..."
-                    : "Search tags..."
-                }
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-4 py-3 text-sm focus:border-indigo-500 outline-none transition-colors text-white"
-              />
-            </div>
-          </div>
+      )}
 
-          {/* === TAB CONTENT: MEMBERS === */}
-          {activeTab === "members" && (
-            <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl overflow-hidden shadow-xl">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-zinc-900 border-b border-zinc-800 text-zinc-500 uppercase font-bold text-xs tracking-wider">
-                  <tr>
-                    <th className="p-4">Member</th>
-                    <th className="p-4 hidden sm:table-cell">Email</th>
-                    <th className="p-4">Role</th>
-                    <th className="p-4 w-10"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-800/50">
-                  {filteredUsers.map((user: Profile) => (
-                    <tr
-                      key={user.id}
-                      className="hover:bg-zinc-900/50 transition-colors group"
-                    >
-                      <td className="p-4">
-                        <div className="flex items-center gap-3">
+      {/* === TAB CONTENT: MEMBERS === */}
+      {activeTab === "members" && (
+        <div className="space-y-4">
+          {usersLoading ? (
+            <div className="text-zinc-500 animate-pulse">
+              Loading members...
+            </div>
+          ) : (
+            <>
+              {/* --- DESKTOP VIEW (Table) --- */}
+              <div className="hidden md:block bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-zinc-950 text-zinc-500 uppercase font-bold text-xs border-b border-zinc-800">
+                    <tr>
+                      <th className="px-6 py-4">User</th>
+                      <th className="px-6 py-4">Role</th>
+                      <th className="px-6 py-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-800">
+                    {filteredUsers.map((user: any) => (
+                      <tr
+                        key={user.id}
+                        className="hover:bg-zinc-800/50 transition-colors"
+                      >
+                        <td className="px-6 py-4">
+                          <div className="font-bold text-white">
+                            {user.display_name || "Unnamed User"}
+                          </div>
+                          <div className="text-zinc-500 text-xs">
+                            {user.email}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="relative inline-block group">
+                            <select
+                              value={user.role || "dancer"}
+                              onChange={(e) =>
+                                handleRoleChange(user.id, e.target.value)
+                              }
+                              disabled={user.id === currentUser?.id}
+                              className="bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-1.5 text-zinc-300 appearance-none pr-8 focus:border-indigo-500 outline-none cursor-pointer disabled:opacity-50"
+                            >
+                              <option value="dancer">Dancer</option>
+                              <option value="teacher">Teacher</option>
+                              <option value="admin">Admin</option>
+                            </select>
+                            {/* Role Icons */}
+                            <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none">
+                              {user.role === "admin" ? (
+                                <Shield size={14} className="text-indigo-400" />
+                              ) : user.role === "teacher" ? (
+                                <GraduationCap
+                                  size={14}
+                                  className="text-green-400"
+                                />
+                              ) : (
+                                <User size={14} className="text-zinc-500" />
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          {user.id !== currentUser?.id && (
+                            <div className="flex justify-end relative z-10">
+                              <KebabMenu
+                                items={[
+                                  {
+                                    label: "Remove Member",
+                                    icon: <Trash2 size={16} />,
+                                    onClick: () =>
+                                      setDeleteConfirm({
+                                        type: "user",
+                                        id: user.id,
+                                      }),
+                                    variant: "danger",
+                                  },
+                                ]}
+                              />
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* --- MOBILE VIEW (Cards) --- */}
+              <div className="md:hidden space-y-3">
+                {filteredUsers.map((user: any) => (
+                  <div
+                    key={user.id}
+                    className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex flex-col gap-4"
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center overflow-hidden border border-zinc-700">
                           {user.avatar_url ? (
                             <img
                               src={user.avatar_url}
-                              className="w-8 h-8 rounded-full object-cover bg-zinc-800"
+                              alt=""
+                              className="w-full h-full object-cover"
                             />
                           ) : (
-                            <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center">
-                              <User size={14} className="text-zinc-500" />
-                            </div>
+                            <User size={18} className="text-zinc-500" />
                           )}
-                          <div>
-                            <span className="font-medium text-white block">
-                              {user.display_name || "Unknown"}
-                            </span>
-                            <span className="sm:hidden text-xs text-zinc-500 font-mono">
-                              {user.email}
-                            </span>
+                        </div>
+                        <div>
+                          <div className="font-bold text-white text-lg">
+                            {user.display_name || "Unnamed User"}
+                          </div>
+                          <div className="text-zinc-500 text-xs break-all">
+                            {user.email}
                           </div>
                         </div>
-                      </td>
-                      <td className="p-4 text-zinc-400 font-mono text-xs hidden sm:table-cell">
-                        {user.email}
-                      </td>
-                      <td className="p-4">
-                        <div className="relative inline-block">
-                          <select
-                            value={user.role || "dancer"}
-                            onChange={(e) =>
-                              updateUserRole(user.id, e.target.value as any)
-                            }
-                            className={`appearance-none bg-zinc-950 border border-zinc-700 text-white pl-9 pr-8 py-2 rounded-lg text-xs font-bold uppercase tracking-wide focus:border-indigo-500 outline-none cursor-pointer hover:bg-zinc-800 transition-colors ${
-                              user.role === "admin"
-                                ? "text-red-300 border-red-900/50"
-                                : user.role === "teacher"
-                                ? "text-amber-300 border-amber-900/50"
-                                : "text-zinc-300"
-                            }`}
-                          >
-                            <option value="dancer">Dancer</option>
-                            <option value="teacher">Teacher</option>
-                            <option value="admin">Admin</option>
-                          </select>
-                          <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                            {getRoleIcon(user.role || "dancer")}
-                          </div>
+                      </div>
+
+                      {/* Kebab Menu */}
+                      {user.id !== currentUser?.id && (
+                        <div className="relative z-10">
+                          <KebabMenu
+                            items={[
+                              {
+                                label: "Remove Member",
+                                icon: <Trash2 size={16} />,
+                                onClick: () =>
+                                  setDeleteConfirm({
+                                    type: "user",
+                                    id: user.id,
+                                  }),
+                                variant: "danger",
+                              },
+                            ]}
+                          />
                         </div>
-                      </td>
-                      <td className="p-4 text-right">
-                        {user.id !== myProfile?.id && (
-                          <div
-                            onClick={(e) => e.stopPropagation()}
-                            className="relative z-10 inline-block"
-                          >
-                            <KebabMenu
-                              items={[
-                                {
-                                  label: "Remove Member",
-                                  icon: <Trash2 size={16} />,
-                                  onClick: () => confirmDelete(user.id, "user"),
-                                  variant: "danger",
-                                },
-                              ]}
+                      )}
+                    </div>
+
+                    {/* Role Selector (Full Width on Mobile) */}
+                    <div className="bg-zinc-950 p-2 rounded-lg border border-zinc-800 flex items-center justify-between">
+                      <span className="text-xs font-bold text-zinc-500 uppercase ml-1">
+                        Role
+                      </span>
+                      <div className="relative">
+                        <select
+                          value={user.role || "dancer"}
+                          onChange={(e) =>
+                            handleRoleChange(user.id, e.target.value)
+                          }
+                          disabled={user.id === currentUser?.id}
+                          className="bg-transparent text-zinc-200 font-bold appearance-none pr-8 focus:outline-none text-right"
+                        >
+                          <option value="dancer">Dancer</option>
+                          <option value="teacher">Teacher</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                        <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none">
+                          {user.role === "admin" ? (
+                            <Shield size={14} className="text-indigo-400" />
+                          ) : user.role === "teacher" ? (
+                            <GraduationCap
+                              size={14}
+                              className="text-green-400"
                             />
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* === TAB CONTENT: TAGS === */}
-          {activeTab === "tags" && (
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-              {filteredTags.map((tag: TagItem) => (
-                <div
-                  key={tag.id}
-                  className="relative flex items-center justify-between p-2 bg-zinc-900 border border-zinc-800 rounded-lg group hover:border-zinc-700 transition-all"
-                >
-                  {/* Tag Name */}
-                  <div className="flex items-center gap-2 min-w-0 pl-2">
-                    <Tag size={14} className="text-indigo-500 shrink-0" />
-                    <span className="text-sm font-medium text-zinc-300 truncate">
-                      #{tag.name}
-                    </span>
+                          ) : (
+                            <User size={14} className="text-zinc-500" />
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
+                ))}
+              </div>
 
-                  {/* Menu: Compact Mode */}
-                  <div
-                    onClick={(e) => e.stopPropagation()}
-                    className="relative z-10 shrink-0"
-                  >
-                    <KebabMenu
-                      width="w-28" // <--- The Fix: Slim width fits everywhere
-                      align="right"
-                      items={[
-                        {
-                          label: "Rename",
-                          icon: <Edit2 size={14} />,
-                          onClick: () => openEditTag(tag),
-                        },
-                        {
-                          label: "Delete",
-                          icon: <Trash2 size={14} />,
-                          onClick: () => confirmDelete(tag.id, "tag"),
-                          variant: "danger",
-                        },
-                      ]}
-                    />
-                  </div>
-                </div>
-              ))}
-              {filteredTags.length === 0 && (
-                <div className="col-span-full py-12 text-center text-zinc-500 border-2 border-dashed border-zinc-800 rounded-xl">
-                  No tags found.
+              {filteredUsers.length === 0 && (
+                <div className="p-8 text-center text-zinc-500">
+                  No members found.
                 </div>
               )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* === TAB CONTENT: TAGS === */}
+      {activeTab === "tags" && (
+        <div className="space-y-6">
+          {/* Create Tag Form (Stacked on mobile) */}
+          <form
+            onSubmit={handleCreateTag}
+            className="flex flex-col sm:flex-row gap-2"
+          >
+            <input
+              type="text"
+              placeholder="Create new tag (e.g., 'Veracruz')"
+              value={newTagName}
+              onChange={(e) => setNewTagName(e.target.value)}
+              className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:border-indigo-500 outline-none"
+            />
+            <button
+              type="submit"
+              disabled={isSubmitting || !newTagName.trim()}
+              className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed sm:w-auto w-full"
+            >
+              {isSubmitting ? (
+                <Loader2 className="animate-spin" size={20} />
+              ) : (
+                <Check size={20} />
+              )}
+              Create
+            </button>
+          </form>
+
+          {/* Tag List */}
+          {tagsLoading ? (
+            <div className="text-zinc-500 animate-pulse">Loading tags...</div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+              {filteredTags.map((tag: any) => (
+                <div
+                  key={tag.id}
+                  className="bg-zinc-900 border border-zinc-800 p-2 rounded-xl flex items-center justify-between group hover:border-zinc-700 transition-colors"
+                >
+                  {editingTag?.id === tag.id ? (
+                    <div className="flex items-center gap-1 flex-1 min-w-0">
+                      <input
+                        autoFocus
+                        type="text"
+                        value={editingTag.name}
+                        onChange={(e) =>
+                          setEditingTag({ ...editingTag, name: e.target.value })
+                        }
+                        className="bg-zinc-950 border border-indigo-500 rounded px-1.5 py-1 text-xs w-full outline-none text-white"
+                      />
+                      <button
+                        onClick={handleUpdateTag}
+                        className="text-green-500 p-1 shrink-0"
+                      >
+                        <Save size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-zinc-300 min-w-0 flex-1">
+                      <Tag
+                        size={14}
+                        className="text-indigo-500/50 shrink-0 ml-1"
+                      />
+                      <span className="font-medium text-sm truncate min-w-0">
+                        {tag.name}
+                      </span>
+                    </div>
+                  )}
+
+                  {!editingTag && (
+                    <div className="relative z-10 shrink-0">
+                      <KebabMenu
+                        width="w-32"
+                        items={[
+                          {
+                            label: "Rename",
+                            icon: <Edit2 size={14} />,
+                            onClick: () => {
+                              setEditingTag(tag);
+                              setNewTagName(tag.name);
+                            },
+                          },
+                          {
+                            label: "Delete",
+                            icon: <Trash2 size={14} />,
+                            onClick: () =>
+                              setDeleteConfirm({ type: "tag", id: tag.id }),
+                            variant: "danger",
+                          },
+                        ]}
+                      />
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           )}
-        </>
+        </div>
+      )}
+
+      {/* === TAB CONTENT: ANALYTICS === */}
+      {activeTab === "analytics" && (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
+          {statsLoading ? (
+            <div className="flex flex-col items-center justify-center py-20 text-zinc-500 gap-3">
+              <Loader2 className="animate-spin" size={32} />
+              <p>Crunching the numbers...</p>
+            </div>
+          ) : (
+            <>
+              {/* 1. KEY METRICS CARDS */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-xl">
+                  <div className="flex items-center gap-3 text-zinc-500 mb-2">
+                    <Activity size={20} className="text-indigo-500" />
+                    <span className="text-xs font-bold uppercase tracking-wider">
+                      30-Day Activity
+                    </span>
+                  </div>
+                  <div className="text-3xl font-bold text-white">
+                    {stats?.monthlyPlays || 0}
+                  </div>
+                  <p className="text-xs text-zinc-500 mt-1">
+                    Total plays this month
+                  </p>
+                </div>
+
+                <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-xl">
+                  <div className="flex items-center gap-3 text-zinc-500 mb-2">
+                    <Users size={20} className="text-green-500" />
+                    <span className="text-xs font-bold uppercase tracking-wider">
+                      Active Dancers
+                    </span>
+                  </div>
+                  <div className="text-3xl font-bold text-white">
+                    {stats?.weeklyActiveUsers || 0}
+                  </div>
+                  <p className="text-xs text-zinc-500 mt-1">
+                    Practiced in last 7 days
+                  </p>
+                </div>
+
+                <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-xl">
+                  <div className="flex items-center gap-3 text-zinc-500 mb-2">
+                    <TrendingUp size={20} className="text-amber-500" />
+                    <span className="text-xs font-bold uppercase tracking-wider">
+                      Top Track
+                    </span>
+                  </div>
+                  <div className="text-lg font-bold text-white truncate">
+                    {stats?.topMedia[0]?.title || "No data yet"}
+                  </div>
+                  <p className="text-xs text-zinc-500 mt-1">
+                    Most popular content
+                  </p>
+                </div>
+              </div>
+
+              {/* 2. TOP CONTENT LIST */}
+              <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl overflow-hidden">
+                <div className="p-4 border-b border-zinc-800 bg-zinc-900">
+                  <h3 className="font-bold text-white flex items-center gap-2">
+                    <TrendingUp size={16} className="text-indigo-500" /> Most
+                    Practiced (All Time)
+                  </h3>
+                </div>
+                <div className="divide-y divide-zinc-800">
+                  {stats?.topMedia.map((item: any, i: number) => (
+                    <div
+                      key={i}
+                      className="p-4 flex items-center justify-between hover:bg-zinc-900 transition-colors"
+                    >
+                      <div className="flex items-center gap-4">
+                        <span className="font-mono text-zinc-600 font-bold text-lg w-6">
+                          {i + 1}
+                        </span>
+                        <div>
+                          <div className="font-bold text-zinc-200">
+                            {item.title}
+                          </div>
+                          <div className="text-xs text-zinc-500 uppercase">
+                            {item.region} • {item.media_type}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-indigo-400 font-bold text-sm bg-indigo-500/10 px-3 py-1 rounded-full">
+                        {item.play_count} plays
+                      </div>
+                    </div>
+                  ))}
+                  {(!stats?.topMedia || stats.topMedia.length === 0) && (
+                    <div className="p-8 text-center text-zinc-500 italic">
+                      No analytics data recorded yet.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       )}
     </main>
   );

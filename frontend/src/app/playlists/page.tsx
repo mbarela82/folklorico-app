@@ -10,6 +10,7 @@ import {
   Globe,
   Layers,
   Trash2,
+  ListMusic,
   Lock,
   User as UserIcon,
 } from "lucide-react";
@@ -191,14 +192,15 @@ export default function PlaylistsPage() {
       {/* Page Header */}
       <div className="flex items-center justify-between mb-8 gap-4">
         <div>
-          <h2 className="text-2xl font-bold">Playlists</h2>
-          <p className="text-zinc-400 text-sm hidden sm:block">
-            Manage your setlists.
-          </p>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <ListMusic className="text-indigo-400" /> Playlists
+          </h1>
+          <p className="text-zinc-400 hidden sm:block">Manage your setlists.</p>
         </div>
+
         <button
           onClick={() => setIsCreateOpen(true)}
-          className="shrink-0 flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-xl font-bold shadow-lg shadow-indigo-500/20 transition-all text-sm sm:text-base"
+          className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-3 rounded-xl font-bold shadow-lg shadow-indigo-500/20 transition-all shrink-0"
         >
           <Plus size={20} />
           <span className="hidden sm:inline">Add Playlist</span>

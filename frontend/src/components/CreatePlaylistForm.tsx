@@ -17,6 +17,7 @@ import {
   Music,
 } from "lucide-react";
 import Toast from "@/components/Toast";
+import { useProfile } from "@/hooks/useTroupeData";
 
 // Import Types
 import { Database } from "@/types/supabase";
@@ -34,6 +35,11 @@ export default function CreatePlaylistForm({
   initialData,
 }: CreatePlaylistFormProps) {
   const isEditing = !!initialData;
+
+  // Get User Role
+  const { data: profile } = useProfile();
+  const canMakePublic =
+    profile?.role === "admin" || profile?.role === "teacher";
 
   // State
   const [title, setTitle] = useState(initialData?.title || "");
@@ -89,8 +95,6 @@ export default function CreatePlaylistForm({
 
   const handleAddItem = (item: MediaItem) => {
     setSelectedItems([...selectedItems, item]);
-
-    // Trigger the "Flash" effect
     setAddedId(item.id);
     setTimeout(() => {
       setAddedId(null);
@@ -151,14 +155,18 @@ export default function CreatePlaylistForm({
     const {
       data: { user },
     } = await supabase.auth.getUser();
+
     if (!user) return;
 
     let playlistId = initialData?.id;
 
+    // Security: Only respect isPublic state if the user actually has the role
+    const safeIsPublic = canMakePublic ? isPublic : false;
+
     if (isEditing) {
       const { error } = await supabase
         .from("playlists")
-        .update({ title, is_public: isPublic })
+        .update({ title, is_public: safeIsPublic })
         .eq("id", playlistId);
       if (error) {
         setIsSaving(false);
@@ -167,7 +175,7 @@ export default function CreatePlaylistForm({
     } else {
       const { data, error } = await supabase
         .from("playlists")
-        .insert({ title, user_id: user.id, is_public: isPublic })
+        .insert({ title, user_id: user.id, is_public: safeIsPublic })
         .select()
         .single();
       if (error) {
@@ -212,7 +220,6 @@ export default function CreatePlaylistForm({
   );
 
   return (
-    // FIX: Removed extra 'p-6 md:p-8' that squished the layout
     <div className="flex flex-col h-[65vh] md:h-[550px] w-full text-zinc-100">
       {toast && (
         <Toast
@@ -234,16 +241,20 @@ export default function CreatePlaylistForm({
             className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-lg font-bold placeholder:text-zinc-600 focus:border-indigo-500 outline-none transition-colors"
           />
 
-          <button
-            onClick={() => setIsPublic(!isPublic)}
-            className={`w-12 h-12 flex items-center justify-center rounded-xl transition-colors border ${
-              isPublic
-                ? "bg-green-900/20 border-green-900 text-green-500"
-                : "bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300"
-            }`}
-          >
-            {isPublic ? <Globe size={20} /> : <Lock size={20} />}
-          </button>
+          {/* UPDATED: Only show button if allowed. Else, show nothing (input expands). */}
+          {canMakePublic && (
+            <button
+              onClick={() => setIsPublic(!isPublic)}
+              title={isPublic ? "Public Playlist" : "Private Playlist"}
+              className={`w-12 h-12 flex items-center justify-center rounded-xl transition-colors border ${
+                isPublic
+                  ? "bg-green-900/20 border-green-900 text-green-500"
+                  : "bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300"
+              }`}
+            >
+              {isPublic ? <Globe size={20} /> : <Lock size={20} />}
+            </button>
+          )}
         </div>
 
         {/* Mobile Tabs */}
@@ -382,14 +393,12 @@ export default function CreatePlaylistForm({
 
           <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
             {filteredLibrary.map((item) => {
-              // --- FLASH LOGIC HERE ---
               const isAdded = addedId === item.id;
 
               return (
                 <button
                   key={item.id}
                   onClick={() => handleAddItem(item)}
-                  // If added, flash green background
                   className={`w-full flex items-center justify-between p-2.5 rounded-lg text-left group transition-all duration-300 ${
                     isAdded ? "bg-green-900/20" : "hover:bg-zinc-800"
                   }`}
@@ -409,7 +418,6 @@ export default function CreatePlaylistForm({
                     </div>
                   </div>
 
-                  {/* Icon Box: Flashes Green + Checkmark on success */}
                   <div
                     className={`w-6 h-6 rounded-md border flex items-center justify-center transition-all duration-300 shrink-0 ${
                       isAdded

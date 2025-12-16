@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { useAnalytics } from "@/hooks/useAnalytics";
 import {
   X,
   Play,
@@ -84,6 +85,10 @@ export default function PracticeStudio({
   const [activeTab, setActiveTab] = useState<"bookmarks" | "comments">(
     "bookmarks"
   );
+
+  // Analytics
+  const { logEvent } = useAnalytics();
+  const hasLoggedPlay = useRef(false); // Prevent spamming logs if they pause/play rapidly
 
   // 1. Initialize Player & User
   useEffect(() => {
@@ -189,11 +194,21 @@ export default function PracticeStudio({
   const togglePlay = () => {
     if (media?.media_type === "audio") {
       wavesurfer.current?.playPause();
+      // 3. Log Audio Play
+      if (!hasLoggedPlay.current) {
+        logEvent(media.id, "play");
+        hasLoggedPlay.current = true;
+      }
     } else {
       const v = videoRef.current;
       if (v?.paused) {
         v.play();
         setIsPlaying(true);
+        // 4. Log Video Play
+        if (!hasLoggedPlay.current) {
+          logEvent(media.id, "play");
+          hasLoggedPlay.current = true;
+        }
       } else {
         v?.pause();
         setIsPlaying(false);

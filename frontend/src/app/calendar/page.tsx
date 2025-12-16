@@ -1,3 +1,4 @@
+// frontend/src/app/calendar/page.tsx
 "use client";
 
 import { useState } from "react";
@@ -27,13 +28,12 @@ import {
 import Toast from "@/components/Toast";
 import ConfirmationModal from "@/components/ConfirmationModal";
 import Modal from "@/components/ui/Modal";
-import KebabMenu from "@/components/ui/KebabMenu"; // <--- Imported KebabMenu
+import KebabMenu from "@/components/ui/KebabMenu";
 
 export default function CalendarPage() {
   const queryClient = useQueryClient();
   const { data: events = [], isLoading } = useEvents();
   const { data: profile } = useProfile();
-
   const isAdmin = profile?.role === "admin" || profile?.role === "teacher";
 
   // Form State
@@ -304,7 +304,8 @@ export default function CalendarPage() {
         {isAdmin && (
           <button
             onClick={openCreateModal}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-xl font-bold shadow-lg shadow-indigo-500/20 transition-all"
+            // UPDATED: Matches Upload Button size (py-3, justify-center, shrink-0)
+            className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-3 rounded-xl font-bold shadow-lg shadow-indigo-500/20 transition-all shrink-0"
           >
             <Plus size={20} />
             <span className="hidden sm:inline">Add Event</span>
