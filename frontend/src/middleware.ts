@@ -85,17 +85,10 @@ export async function middleware(request: NextRequest) {
 }
 
 // CONFIG: Tell Next.js which paths to run this middleware on
+// frontend/src/middleware.ts
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - api/ (API routes - generally we protect these differently, or let them pass
-     * if they have their own auth checks, but usually good to include)
-     * Feel free to modify this to include/exclude specific patterns.
-     */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    // exclude static assets, images, favicon, AND auth/callback
+    "/((?!_next/static|_next/image|favicon.ico|auth/callback|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
