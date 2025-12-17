@@ -24,7 +24,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <Providers>
-          <div className="flex h-screen bg-zinc-950 text-zinc-200 overflow-hidden">
+          <div className="flex min-h-dvh bg-zinc-950 text-zinc-200">
             {/* 1. Desktop Sidebar (Left) */}
             <Sidebar />
 
@@ -35,13 +35,11 @@ export default function RootLayout({
 
               {/* Scrollable Page Content */}
               {/* Added pb-24 so content doesn't get cut off by the bottom nav */}
-              <main className="flex-1 overflow-y-auto pb-24 md:pb-0">
-                {children}
-              </main>
+              <main className="flex-1 overflow-y-auto md:pb-0">{children}</main>
             </div>
 
             {/* 3. Mobile Bottom Nav (Floating Above Everything) */}
-            <div className="md:hidden fixed bottom-0 left-0 right-0 z-50">
+            <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-zinc-950">
               <MobileNav />
             </div>
           </div>

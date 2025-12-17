@@ -22,7 +22,7 @@ import WaveSurfer from "wavesurfer.js";
 
 // Components
 import CommentSection from "@/components/CommentSection";
-import BookmarkList from "@/components/BookmarkList"; // <--- The new component
+import BookmarkList from "@/components/BookmarkList";
 
 import { Database } from "@/types/supabase";
 type MediaItem = Database["public"]["Tables"]["media_items"]["Row"];
@@ -88,7 +88,7 @@ export default function PracticeStudio({
 
   // Analytics
   const { logEvent } = useAnalytics();
-  const hasLoggedPlay = useRef(false); // Prevent spamming logs if they pause/play rapidly
+  const hasLoggedPlay = useRef(false);
 
   // 1. Initialize Player & User
   useEffect(() => {
@@ -181,7 +181,6 @@ export default function PracticeStudio({
 
   const fetchBookmarks = async () => {
     if (!media) return;
-    // RLS Policy (Secure) will handle filtering private/public automatically
     const { data } = await supabase
       .from("bookmarks")
       .select("*")
@@ -194,7 +193,6 @@ export default function PracticeStudio({
   const togglePlay = () => {
     if (media?.media_type === "audio") {
       wavesurfer.current?.playPause();
-      // 3. Log Audio Play
       if (!hasLoggedPlay.current) {
         logEvent(media.id, "play");
         hasLoggedPlay.current = true;
@@ -204,7 +202,6 @@ export default function PracticeStudio({
       if (v?.paused) {
         v.play();
         setIsPlaying(true);
-        // 4. Log Video Play
         if (!hasLoggedPlay.current) {
           logEvent(media.id, "play");
           hasLoggedPlay.current = true;
@@ -261,7 +258,6 @@ export default function PracticeStudio({
     const time = parseFloat(e.target.value);
     const { a, b, active } = loopRef.current;
 
-    // If dragging outside loop, break loop
     if (active && a !== null && b !== null) {
       if (time < a - 1 || time > b + 1) {
         clearLoop();
@@ -278,7 +274,6 @@ export default function PracticeStudio({
 
   const jumpTo = (time: number) => {
     const { a, active } = loopRef.current;
-    // If jumping far away, break loop
     if (active && a !== null && Math.abs(time - a) > 0.5) {
       clearLoop();
     }
@@ -320,7 +315,6 @@ export default function PracticeStudio({
   const handleSaveBookmark = async () => {
     if (!media) return;
 
-    // 1. Get User
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -329,7 +323,6 @@ export default function PracticeStudio({
       return;
     }
 
-    // 2. Attempt Save
     const { error } = await supabase.from("bookmarks").insert({
       media_id: media.id,
       user_id: user.id,
@@ -338,7 +331,6 @@ export default function PracticeStudio({
       is_public: isNewMarkPublic,
     });
 
-    // 3. Handle Result
     if (error) {
       console.error("Save Error:", error);
       alert(`Error saving note: ${error.message}`);
@@ -399,15 +391,17 @@ export default function PracticeStudio({
       </div>
 
       {/* BODY */}
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+      {/* FIXED: Changed to overflow-y-auto on mobile to allow scrolling entire page */}
+      <div className="flex-1 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden relative">
         {/* LEFT: MEDIA (Z-0) */}
-        <div className="relative z-0 bg-black flex items-center justify-center shrink-0 h-[30vh] md:h-full md:w-[70%] md:border-r md:border-zinc-800 group">
+        <div className="relative z-0 bg-black flex items-center justify-center shrink-0 h-auto min-h-[30vh] md:h-full md:w-[70%] md:border-r md:border-zinc-800 group">
           {media.media_type === "video" && (
             <>
               <video
                 ref={videoRef}
                 src={media.file_path}
-                className="h-full w-full object-contain transition-transform duration-300"
+                playsInline
+                className="w-auto h-auto max-h-[60vh] md:w-full md:h-full object-contain transition-transform duration-300"
                 style={{ transform: isMirrored ? "scaleX(-1)" : "none" }}
                 onTimeUpdate={handleVideoTimeUpdate}
                 onEnded={() => setIsPlaying(false)}
@@ -457,7 +451,8 @@ export default function PracticeStudio({
         </div>
 
         {/* RIGHT: CONTROLS (Z-10) */}
-        <div className="flex-1 flex flex-col bg-zinc-900 overflow-hidden md:w-[30%] relative z-10">
+        {/* FIXED: Added min-h-[60vh] on mobile and removed overflow-hidden to allow expansion */}
+        <div className="flex-1 flex flex-col bg-zinc-900 overflow-visible md:overflow-hidden md:w-[30%] relative z-10 min-h-[60vh] md:min-h-0">
           <div className="p-4 border-b border-zinc-800 shrink-0 bg-zinc-900 relative z-50 shadow-xl">
             {/* ROW 1: TIME & SPEED */}
             <div className="mb-3 flex items-center justify-between">
@@ -476,10 +471,7 @@ export default function PracticeStudio({
             {/* ROW 2: SCRUBBER (Video Only) */}
             {media.media_type === "video" && (
               <div className="mb-4 relative h-2 group/scrubber">
-                {/* 1. Track Background */}
                 <div className="absolute inset-0 bg-zinc-700 rounded-lg z-0" />
-
-                {/* 2. Loop Box (Visual) */}
                 {activeLoopId && loopA !== null && (
                   <div
                     className="absolute top-0 bottom-0 bg-indigo-500/30 pointer-events-none z-0"
@@ -491,8 +483,6 @@ export default function PracticeStudio({
                     }}
                   />
                 )}
-
-                {/* 3. Bookmark Dots */}
                 <div className="absolute top-0 w-full h-full z-10 pointer-events-none">
                   {bookmarks.map((b) => (
                     <div
@@ -504,8 +494,6 @@ export default function PracticeStudio({
                     />
                   ))}
                 </div>
-
-                {/* 4. Interactive Input */}
                 <input
                   type="range"
                   min="0"
@@ -614,7 +602,8 @@ export default function PracticeStudio({
           </div>
 
           {/* --- TAB CONTENT AREA --- */}
-          <div className="flex-1 overflow-y-auto p-4 pb-20 md:pb-4 relative z-0">
+          {/* FIXED: Removed overflow-y-auto on mobile so it pushes parent height, kept for desktop */}
+          <div className="md:flex-1 md:overflow-y-auto p-4 pb-20 md:pb-4 relative z-0">
             {/* VIEW 1: BOOKMARKS */}
             {activeTab === "bookmarks" && (
               <>
@@ -630,7 +619,7 @@ export default function PracticeStudio({
                       className="w-full bg-zinc-900 border border-zinc-800 rounded p-2 text-sm text-white mb-2 focus:border-indigo-500 outline-none"
                     />
 
-                    {/* TEACHER TOGGLE (Only visible to Admins/Teachers) */}
+                    {/* TEACHER TOGGLE */}
                     {(userRole === "teacher" || userRole === "admin") && (
                       <div
                         onClick={() => setIsNewMarkPublic(!isNewMarkPublic)}
@@ -702,7 +691,7 @@ export default function PracticeStudio({
                   </div>
                 )}
 
-                {/* --- C. THE LIST (Refactored) --- */}
+                {/* --- C. THE LIST --- */}
                 <BookmarkList
                   bookmarks={bookmarks}
                   currentUserId={currentUserId}
