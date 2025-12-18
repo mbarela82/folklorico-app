@@ -9,7 +9,8 @@ interface BookmarkListProps {
   bookmarks: BookmarkItem[];
   currentUserId: string | null;
   activeLoopId: string | null;
-  onJump: (time: number) => void;
+  selectedId?: string | null;
+  onJump: (time: number, id: string) => void;
   onLoop: (bookmark: BookmarkItem) => void;
   onDelete: (id: string) => void;
   formatTime: (seconds: number) => string;
@@ -19,6 +20,7 @@ export default function BookmarkList({
   bookmarks,
   currentUserId,
   activeLoopId,
+  selectedId,
   onJump,
   onLoop,
   onDelete,
@@ -35,31 +37,41 @@ export default function BookmarkList({
   return (
     <div className="space-y-2">
       {bookmarks.map((mark) => {
-        const isLooping = activeLoopId === mark.id; // Correctly identifies the active bookmark
+        const isLooping = activeLoopId === mark.id;
+        const isSelected = selectedId === mark.id;
         const isOwner = mark.user_id === currentUserId;
         const isPublic = mark.is_public;
 
         return (
           <div
             key={mark.id}
-            className={`w-full flex items-center justify-between p-3 border rounded-lg transition-all group relative overflow-hidden ${
+            className={[
+              "w-full flex items-center justify-between p-3 border rounded-lg transition-all group relative overflow-hidden active:scale-[0.985]",
               isLooping
-                ? "bg-indigo-500/10 border-indigo-500 ring-1 ring-indigo-500/50 shadow-[0_0_10px_rgba(99,102,241,0.1)]" // Active Highlight
-                : "bg-zinc-950 border-zinc-800 hover:bg-zinc-800"
-            }`}
+                ? "bg-indigo-500/10 border-indigo-500 ring-1 ring-indigo-500/50 shadow-[0_0_10px_rgba(99,102,241,0.1)]"
+                : isSelected
+                ? "bg-indigo-500/5 border-indigo-400/70 ring-1 ring-indigo-400/20"
+                : "bg-zinc-950 border-zinc-800 hover:bg-zinc-800",
+            ].join(" ")}
           >
-            {/* Public Strip Indicator */}
             {isPublic && (
               <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-500" />
             )}
 
+            {(isSelected || isLooping) && (
+              <div
+                className={`absolute left-0 top-2 bottom-2 w-1 rounded-full ${
+                  isLooping ? "bg-indigo-500" : "bg-indigo-400/60"
+                }`}
+              />
+            )}
+
             <div
               className="flex items-center gap-3 flex-1 cursor-pointer min-w-0"
-              onClick={() => onJump(mark.start_time)}
+              onClick={() => onJump(mark.start_time, mark.id)}
             >
-              {/* Time Badge Highlights when looping */}
               <div
-                className={`font-mono text-xs font-bold px-2 py-1 rounded shrink-0 transition-colors ${
+                className={`font-mono text-xs font-bold px-2 py-1 rounded shrink-0 ${
                   isLooping
                     ? "bg-indigo-500 text-white"
                     : "bg-zinc-800 text-zinc-400"
@@ -68,10 +80,9 @@ export default function BookmarkList({
                 {formatTime(mark.start_time)}
               </div>
 
-              {/* Note Content */}
               <div className="flex flex-col min-w-0">
                 <span
-                  className={`text-sm font-medium truncate transition-colors ${
+                  className={`text-sm font-medium truncate ${
                     isLooping
                       ? "text-white"
                       : isPublic
@@ -96,7 +107,6 @@ export default function BookmarkList({
               </div>
             </div>
 
-            {/* Actions */}
             <div className="flex items-center gap-1 pl-2">
               <button
                 onClick={(e) => {
@@ -105,7 +115,7 @@ export default function BookmarkList({
                 }}
                 className={`p-2 rounded-lg transition-all ${
                   isLooping
-                    ? "text-white bg-indigo-500" // Highlighted Loop Button
+                    ? "text-white bg-indigo-500"
                     : "text-zinc-600 hover:text-white hover:bg-zinc-700"
                 }`}
                 title="Loop this section"

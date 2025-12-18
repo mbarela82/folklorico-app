@@ -1,16 +1,14 @@
 import { X } from "lucide-react";
 
-interface StudioHeaderProps {
-  title: string;
-  region?: string | null;
-  onClose: (e: React.MouseEvent) => void;
-}
-
 export default function StudioHeader({
   title,
   region,
   onClose,
-}: StudioHeaderProps) {
+}: {
+  title: string;
+  region?: string | null;
+  onClose: (e: React.MouseEvent) => void;
+}) {
   return (
     <div className="flex items-center justify-between p-4 border-b border-zinc-900 shrink-0 bg-zinc-950 relative z-50">
       <div className="text-center flex-1 px-4 overflow-hidden">

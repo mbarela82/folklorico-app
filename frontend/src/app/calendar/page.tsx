@@ -170,7 +170,7 @@ export default function CalendarPage() {
         onClose={() => setIsModalOpen(false)}
         title={editingEvent ? "Edit Event" : "Schedule New Event"}
       >
-        <div className="p-6">
+        <div className="p-6 overflow-y-auto max-h-[75vh]">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="col-span-2">
@@ -189,34 +189,35 @@ export default function CalendarPage() {
                 />
               </div>
 
-              <div>
-                <label className="text-xs font-bold text-zinc-500 uppercase ml-1">
-                  Date
-                </label>
-                <input
-                  required
-                  type="date"
-                  value={formData.date}
-                  onChange={(e) =>
-                    setFormData({ ...formData, date: e.target.value })
-                  }
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:border-indigo-500 outline-none [color-scheme:dark]"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-zinc-500 uppercase ml-1">
-                  Start Time
-                </label>
-                <input
-                  required
-                  type="time"
-                  value={formData.startTime}
-                  onChange={(e) =>
-                    setFormData({ ...formData, startTime: e.target.value })
-                  }
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:border-indigo-500 outline-none [color-scheme:dark]"
-                />
+              <div className="col-span-2 grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-zinc-500 uppercase ml-1">
+                    Date
+                  </label>
+                  <input
+                    required
+                    type="date"
+                    value={formData.date}
+                    onChange={(e) =>
+                      setFormData({ ...formData, date: e.target.value })
+                    }
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:border-indigo-500 outline-none [color-scheme:dark]"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-zinc-500 uppercase ml-1">
+                    Start Time
+                  </label>
+                  <input
+                    required
+                    type="time"
+                    value={formData.startTime}
+                    onChange={(e) =>
+                      setFormData({ ...formData, startTime: e.target.value })
+                    }
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:border-indigo-500 outline-none [color-scheme:dark]"
+                  />
+                </div>
               </div>
 
               <div className="col-span-2">
