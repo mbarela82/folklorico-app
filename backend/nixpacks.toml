@@ -1,8 +1,0 @@
-# backend/nixpacks.toml
-
-[phases.setup]
-nixPkgs = ["python3", "ffmpeg"]
-
-[start]
-# This command tells Railway how to start your server
-cmd = "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
