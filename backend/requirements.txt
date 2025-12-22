@@ -4,3 +4,4 @@ supabase
 python-multipart
 python-dotenv
 ffmpeg-python
+boto3
