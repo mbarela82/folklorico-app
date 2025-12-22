@@ -1,17 +1,18 @@
 import os
 import shutil
 import uuid
+import re
 import boto3
 import ffmpeg
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, UploadFile, File, HTTPException, Header, Depends
+# Added 'Form' to imports
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from supabase import create_client, Client
 from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
 
 app = FastAPI()
@@ -47,7 +48,8 @@ s3_client = boto3.client(
 )
 
 R2_BUCKET_NAME = os.getenv("R2_BUCKET_NAME")
-R2_PUBLIC_DOMAIN = os.getenv("R2_PUBLIC_DOMAIN")
+# Ensure we don't have double slashes if the env var ends in /
+R2_PUBLIC_DOMAIN = os.getenv("R2_PUBLIC_DOMAIN", "").rstrip("/")
 
 TEMP_DIR = Path("temp")
 TEMP_DIR.mkdir(exist_ok=True)
@@ -68,12 +70,22 @@ def get_current_user(authorization: str = Header(None)):
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"Authentication Failed: {str(e)}")
 
-def save_upload_file_tmp(upload_file: UploadFile) -> Path:
-    """Save the uploaded file to a temporary location on disk."""
+def sanitize_filename(title: str) -> str:
+    """Converts 'El Son de la Negra' to 'el_son_de_la_negra'."""
+    # Lowercase, replace spaces with underscores, remove non-alphanumeric
+    clean = re.sub(r'[^a-z0-9_]', '', title.lower().replace(" ", "_"))
+    return clean
+
+def save_upload_file_tmp(upload_file: UploadFile, title: str) -> Path:
+    """Save upload to temp with optimized naming convention."""
     try:
         file_extension = upload_file.filename.split(".")[-1]
-        temp_filename = f"{uuid.uuid4()}.{file_extension}"
-        temp_path = TEMP_DIR / temp_filename
+        clean_title = sanitize_filename(title)
+        # Naming Format: optimized_title_shortuuid.ext
+        short_id = str(uuid.uuid4())[:8]
+        new_filename = f"optimized_{clean_title}_{short_id}.{file_extension}"
+        
+        temp_path = TEMP_DIR / new_filename
         
         with open(temp_path, "wb") as buffer:
             shutil.copyfileobj(upload_file.file, buffer)
@@ -83,7 +95,6 @@ def save_upload_file_tmp(upload_file: UploadFile) -> Path:
         upload_file.file.close()
 
 def generate_thumbnail(video_path: Path) -> Optional[Path]:
-    """Use FFmpeg to generate a JPG thumbnail from a video."""
     thumb_path = video_path.with_suffix(".jpg")
     try:
         (
@@ -100,7 +111,6 @@ def generate_thumbnail(video_path: Path) -> Optional[Path]:
         return None
 
 def convert_video_to_mp4(input_path: Path) -> Optional[Path]:
-    """Converts input video to browser-compatible MP4 (H.264/AAC)."""
     output_path = input_path.with_suffix(".mp4")
     try:
         (
@@ -118,15 +128,11 @@ def convert_video_to_mp4(input_path: Path) -> Optional[Path]:
             .run(capture_stdout=True, capture_stderr=True)
         )
         return output_path
-    except ffmpeg.Error as e:
-        print(f"Video Conversion Error: {e.stderr.decode('utf8')}")
-        return None
     except Exception as e:
-        print(f"General Video Conversion Error: {str(e)}")
+        print(f"Video Conversion Error: {str(e)}")
         return None
 
 def convert_audio_to_m4a(input_path: Path) -> Optional[Path]:
-    """Converts input audio to M4A (AAC)."""
     output_path = input_path.with_suffix(".m4a")
     try:
         (
@@ -134,24 +140,19 @@ def convert_audio_to_m4a(input_path: Path) -> Optional[Path]:
             .input(str(input_path))
             .output(
                 str(output_path),
-                acodec='aac',      # Use AAC codec for M4A
+                acodec='aac',
                 audio_bitrate='192k'
             )
             .overwrite_output()
             .run(capture_stdout=True, capture_stderr=True)
         )
         return output_path
-    except ffmpeg.Error as e:
-        print(f"Audio Conversion Error: {e.stderr.decode('utf8')}")
-        return None
     except Exception as e:
-        print(f"General Audio Conversion Error: {str(e)}")
+        print(f"Audio Conversion Error: {str(e)}")
         return None
 
 def upload_file_to_r2(file_path: Path, content_type: str, folder: str) -> str:
-    """Uploads a local file to R2 inside a specific folder and returns the public URL."""
     file_name = file_path.name
-    # Create object key with folder prefix (e.g., "mp4/myfile.mp4")
     object_key = f"{folder}/{file_name}"
     
     try:
@@ -164,7 +165,15 @@ def upload_file_to_r2(file_path: Path, content_type: str, folder: str) -> str:
                 'ACL': 'public-read'
             }
         )
-        return f"{R2_PUBLIC_DOMAIN}/{object_key}"
+        
+        # --- FIX FOR PLAYBACK ISSUES ---
+        # Ensure the domain has https:// prefix
+        domain = R2_PUBLIC_DOMAIN
+        if not domain.startswith("http"):
+            domain = f"https://{domain}"
+            
+        return f"{domain}/{object_key}"
+        
     except Exception as e:
         raise Exception(f"Failed to upload {file_name} to R2: {str(e)}")
 
@@ -179,6 +188,8 @@ def health_check():
 @app.post("/upload/convert")
 async def upload_and_process(
     file: UploadFile = File(...),
+    # We now accept 'title' from the form data
+    title: str = Form(...),
     user=Depends(get_current_user)
 ):
     temp_file_path = None
@@ -186,13 +197,12 @@ async def upload_and_process(
     thumb_path = None
     
     try:
-        # 1. Save raw file to disk
-        temp_file_path = save_upload_file_tmp(file)
+        # 1. Save raw file with NEW NAMING CONVENTION
+        temp_file_path = save_upload_file_tmp(file, title)
         final_upload_path = temp_file_path
         final_content_type = file.content_type
-        folder_name = "misc" # Default fallback
+        folder_name = "misc"
         
-        # 2. Determine Media Type
         is_video = file.content_type.startswith("video")
         is_audio = file.content_type.startswith("audio")
         
@@ -202,7 +212,6 @@ async def upload_and_process(
         if is_video:
             thumb_path = generate_thumbnail(temp_file_path)
             if thumb_path and thumb_path.exists():
-                # Thumbnails go to "thumbnails" folder
                 thumbnail_url = upload_file_to_r2(thumb_path, "image/jpeg", "thumbnails")
             
             converted_path = convert_video_to_mp4(temp_file_path)
@@ -210,7 +219,6 @@ async def upload_and_process(
                 final_upload_path = converted_path
                 final_content_type = "video/mp4"
             
-            # FIXED: Explicit folder name "mp4"
             folder_name = "mp4"
 
         # 3B. Handle AUDIO -> Folder: "m4a"
@@ -220,10 +228,9 @@ async def upload_and_process(
                 final_upload_path = converted_path
                 final_content_type = "audio/mp4" 
             
-            # FIXED: Explicit folder name "m4a"
             folder_name = "m4a"
 
-        # 4. Upload Final File to the correct folder
+        # 4. Upload Final File
         public_url = upload_file_to_r2(final_upload_path, final_content_type, folder_name)
 
         return {
@@ -237,7 +244,6 @@ async def upload_and_process(
         raise HTTPException(status_code=500, detail=str(e))
         
     finally:
-        # 5. CLEANUP
         for path in [temp_file_path, converted_path, thumb_path]:
             try:
                 if path and path.exists():
@@ -248,8 +254,6 @@ async def upload_and_process(
 @app.delete("/media/{media_id}")
 async def delete_media(media_id: str, user=Depends(get_current_user)):
     try:
-        # Note: To delete from R2 properly, you'd need the file path stored in DB
-        # For now we just remove the DB entry
         response = supabase.table("media_items").delete().eq("id", media_id).execute()
         return {"message": "Media deleted successfully"}
     except Exception as e:

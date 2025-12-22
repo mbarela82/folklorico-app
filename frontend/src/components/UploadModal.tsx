@@ -85,6 +85,7 @@ export default function UploadModal({
 
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("title", title);
 
       // 2. USE XHR INSTEAD OF FETCH (For Progress Tracking)
       const result = await new Promise<any>((resolve, reject) => {
