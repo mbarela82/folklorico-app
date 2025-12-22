@@ -34,7 +34,7 @@ security = HTTPBearer()
 app.add_middleware(
     CORSMiddleware,
     # Adjust this list to match your production domain if needed
-    allow_origins=["http://localhost:3000", "https://your-production-app.com"], 
+    allow_origins=["http://localhost:3000", "https://folklorico-app.vercel.app"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
