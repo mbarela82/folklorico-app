@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
 import { Video, PlusCircle, MapPin, Filter } from "lucide-react";
-
 import { useRegions, useMediaLibrary, useProfile } from "@/hooks/useTroupeData";
+import API_URL from "@/lib/api"; // <--- IMPORT THIS
 import MediaCard from "@/components/MediaCard";
 import PracticeStudio from "@/components/PracticeStudio";
 import UploadModal from "@/components/UploadModal";
@@ -21,16 +20,13 @@ type MediaItemWithTags = Database["public"]["Tables"]["media_items"]["Row"] & {
   tags?: string[];
 };
 
-export default function VideoPage() {
+function VideoContent() {
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const playId = searchParams.get("play");
 
-  // Filter State
   const [selectedRegion, setSelectedRegion] = useState<string>("All");
   const [filterTag, setFilterTag] = useState<string | null>(null);
-
-  // DATA
   const { data: regions = [] } = useRegions("video");
   const { data: mediaItems = [], isLoading } = useMediaLibrary(
     "video",
@@ -39,7 +35,6 @@ export default function VideoPage() {
   const { data: profile } = useProfile();
   const isAdmin = profile?.role === "admin" || profile?.role === "teacher";
 
-  // UI State
   const [currentMedia, setCurrentMedia] = useState<MediaItemWithTags | null>(
     null
   );
@@ -53,17 +48,13 @@ export default function VideoPage() {
     type: "success" | "error";
   } | null>(null);
 
-  // --- DEEP LINKING LOGIC ---
   useEffect(() => {
     if (playId && mediaItems.length > 0) {
       const targetItem = mediaItems.find((item) => item.id === playId);
-      if (targetItem) {
-        setCurrentMedia(targetItem);
-      }
+      if (targetItem) setCurrentMedia(targetItem);
     }
   }, [playId, mediaItems]);
 
-  // Derived State
   const availableTags = useMemo(() => {
     const allTags = mediaItems.flatMap((item) => item.tags || []);
     return Array.from(new Set(allTags)).sort();
@@ -79,11 +70,20 @@ export default function VideoPage() {
     queryClient.invalidateQueries({ queryKey: ["regions", "video"] });
   };
 
+  // --- UPDATED DELETE FUNCTION ---
   const handleDelete = async () => {
     if (!deleteId) return;
     try {
-      const response = await fetch(`http://127.0.0.1:8000/media/${deleteId}`, {
+      // CHANGE: Use API_URL
+      const response = await fetch(`${API_URL}/media/${deleteId}`, {
         method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${(
+            await import("@/lib/supabaseClient")
+          ).supabase.auth
+            .getSession()
+            .then(({ data }) => data.session?.access_token)}`,
+        },
       });
       if (!response.ok) throw new Error("Failed to delete video");
 
@@ -97,7 +97,8 @@ export default function VideoPage() {
   };
 
   return (
-    <main className="flex-1 p-4 md:p-8 overflow-y-auto h-full pb-24 md:pb-8">
+    <div className="flex-1 p-4 md:p-8 overflow-y-auto h-full pb-24 md:pb-8">
+      {/* (Keep JSX same as before) */}
       {toast && (
         <Toast
           message={toast.msg}
@@ -109,13 +110,10 @@ export default function VideoPage() {
       {currentMedia && (
         <PracticeStudio
           media={currentMedia as any}
-          onClose={() => {
-            setCurrentMedia(null);
-          }}
+          onClose={() => setCurrentMedia(null)}
         />
       )}
 
-      {/* MODALS */}
       <UploadModal
         isOpen={isUploadOpen}
         onClose={() => setIsUploadOpen(false)}
@@ -154,7 +152,7 @@ export default function VideoPage() {
         confirmText="Yes, Delete"
       />
 
-      {/* PAGE HEADER */}
+      {/* Header and Grid */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-4">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -184,8 +182,6 @@ export default function VideoPage() {
               <Filter size={12} />
             </div>
           </div>
-
-          {/* Conditional Upload Button */}
           {isAdmin && (
             <button
               onClick={() => setIsUploadOpen(true)}
@@ -198,7 +194,6 @@ export default function VideoPage() {
         </div>
       </div>
 
-      {/* FILTERS */}
       <div className="mb-6">
         <TagFilterBar
           availableTags={availableTags}
@@ -207,7 +202,6 @@ export default function VideoPage() {
         />
       </div>
 
-      {/* CONTENT */}
       {isLoading ? (
         <div className="text-zinc-500 animate-pulse">Loading library...</div>
       ) : filteredItems.length === 0 ? (
@@ -232,6 +226,16 @@ export default function VideoPage() {
           ))}
         </div>
       )}
-    </main>
+    </div>
+  );
+}
+
+export default function VideoPage() {
+  return (
+    <Suspense
+      fallback={<div className="p-8 text-zinc-500">Loading Videos...</div>}
+    >
+      <VideoContent />
+    </Suspense>
   );
 }

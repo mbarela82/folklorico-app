@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation"; // <--- Added useSearchParams
+import { useState, useEffect, Suspense } from "react"; // <--- Added Suspense
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -36,10 +36,11 @@ import PlaylistPlayer from "@/components/PlaylistPlayer";
 import UploadModal from "@/components/UploadModal";
 import KebabMenu from "@/components/ui/KebabMenu";
 
-export default function PlaylistsPage() {
+// 1. ISOLATE CONTENT
+function PlaylistsContent() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const searchParams = useSearchParams(); // <--- 1. Get URL Params
+  const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
 
   // 1. GET DATA FROM CACHE (Instant)
@@ -75,7 +76,7 @@ export default function PlaylistsPage() {
   );
   const sharedPlaylists = playlists.filter((p) => p.is_public);
 
-  // --- NEW: AUTO-SWITCH TAB LOGIC ---
+  // --- AUTO-SWITCH TAB LOGIC ---
   useEffect(() => {
     if (tabParam === "shared") {
       setActiveTab("shared");
@@ -107,7 +108,6 @@ export default function PlaylistsPage() {
 
   const handleDelete = async () => {
     if (!deleteId) return;
-
     const { error } = await supabase
       .from("playlists")
       .delete()
@@ -121,7 +121,7 @@ export default function PlaylistsPage() {
   };
 
   return (
-    <main className="flex-1 p-4 md:p-8 overflow-y-auto h-full">
+    <div className="flex-1 p-4 md:p-8 overflow-y-auto h-full">
       <UploadModal
         isOpen={isUploadOpen}
         onClose={() => setIsUploadOpen(false)}
@@ -341,6 +341,17 @@ export default function PlaylistsPage() {
           })}
         </div>
       )}
-    </main>
+    </div>
+  );
+}
+
+// 2. EXPORT WRAPPER
+export default function PlaylistsPage() {
+  return (
+    <Suspense
+      fallback={<div className="p-8 text-zinc-500">Loading Playlists...</div>}
+    >
+      <PlaylistsContent />
+    </Suspense>
   );
 }

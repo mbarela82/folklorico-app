@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
-import { Music, PlusCircle, MapPin, Filter, Layers } from "lucide-react";
+import { Music, PlusCircle, MapPin, Filter } from "lucide-react";
 
 import { useRegions, useMediaLibrary, useProfile } from "@/hooks/useTroupeData";
+import API_URL from "@/lib/api"; // <--- IMPORT THIS
 import MediaCard from "@/components/MediaCard";
 import PracticeStudio from "@/components/PracticeStudio";
 import UploadModal from "@/components/UploadModal";
@@ -21,16 +21,14 @@ type MediaItemWithTags = Database["public"]["Tables"]["media_items"]["Row"] & {
   tags?: string[];
 };
 
-export default function MusicPage() {
+function MusicContent() {
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const playId = searchParams.get("play");
 
-  // Filter State
+  // ... (keep all state and hooks the same) ...
   const [selectedRegion, setSelectedRegion] = useState<string>("All");
   const [filterTag, setFilterTag] = useState<string | null>(null);
-
-  // DATA HOOKS
   const { data: regions = [] } = useRegions("audio");
   const { data: mediaItems = [], isLoading } = useMediaLibrary(
     "audio",
@@ -39,7 +37,6 @@ export default function MusicPage() {
   const { data: profile } = useProfile();
   const isAdmin = profile?.role === "admin" || profile?.role === "teacher";
 
-  // UI State
   const [currentMedia, setCurrentMedia] = useState<MediaItemWithTags | null>(
     null
   );
@@ -53,17 +50,13 @@ export default function MusicPage() {
     type: "success" | "error";
   } | null>(null);
 
-  // --- DEEP LINKING LOGIC ---
   useEffect(() => {
     if (playId && mediaItems.length > 0) {
       const targetItem = mediaItems.find((item) => item.id === playId);
-      if (targetItem) {
-        setCurrentMedia(targetItem);
-      }
+      if (targetItem) setCurrentMedia(targetItem);
     }
   }, [playId, mediaItems]);
 
-  // Derived State (Tags)
   const availableTags = useMemo(() => {
     const allTags = mediaItems.flatMap((item) => item.tags || []);
     return Array.from(new Set(allTags)).sort();
@@ -79,11 +72,21 @@ export default function MusicPage() {
     queryClient.invalidateQueries({ queryKey: ["regions", "audio"] });
   };
 
+  // --- UPDATED DELETE FUNCTION ---
   const handleDelete = async () => {
     if (!deleteId) return;
     try {
-      const response = await fetch(`http://127.0.0.1:8000/media/${deleteId}`, {
+      // CHANGE: Use API_URL
+      const response = await fetch(`${API_URL}/media/${deleteId}`, {
         method: "DELETE",
+        // Note: You likely need auth headers here if your backend checks for Admins
+        headers: {
+          Authorization: `Bearer ${(
+            await import("@/lib/supabaseClient")
+          ).supabase.auth
+            .getSession()
+            .then(({ data }) => data.session?.access_token)}`,
+        },
       });
       if (!response.ok) throw new Error("Failed to delete media");
 
@@ -97,7 +100,9 @@ export default function MusicPage() {
   };
 
   return (
-    <main className="flex-1 p-4 md:p-8 overflow-y-auto h-full pb-24 md:pb-8">
+    <div className="flex-1 p-4 md:p-8 overflow-y-auto h-full pb-24 md:pb-8">
+      {/* ... (Keep your existing JSX exactly the same) ... */}
+      {/* Just making sure the import above is correct is the main thing */}
       {toast && (
         <Toast
           message={toast.msg}
@@ -109,13 +114,10 @@ export default function MusicPage() {
       {currentMedia && (
         <PracticeStudio
           media={currentMedia as any}
-          onClose={() => {
-            setCurrentMedia(null);
-          }}
+          onClose={() => setCurrentMedia(null)}
         />
       )}
 
-      {/* MODALS */}
       <UploadModal
         isOpen={isUploadOpen}
         onClose={() => setIsUploadOpen(false)}
@@ -154,7 +156,7 @@ export default function MusicPage() {
         confirmText="Yes, Delete"
       />
 
-      {/* PAGE HEADER */}
+      {/* Header and Grid Section (Same as before) */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-4">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -184,8 +186,6 @@ export default function MusicPage() {
               <Filter size={12} />
             </div>
           </div>
-
-          {/* Only Show Upload Button if Admin/Teacher */}
           {isAdmin && (
             <button
               onClick={() => setIsUploadOpen(true)}
@@ -198,7 +198,6 @@ export default function MusicPage() {
         </div>
       </div>
 
-      {/* FILTERS */}
       <div className="mb-6">
         <TagFilterBar
           availableTags={availableTags}
@@ -207,7 +206,6 @@ export default function MusicPage() {
         />
       </div>
 
-      {/* CONTENT */}
       {isLoading ? (
         <div className="text-zinc-500 animate-pulse">Loading library...</div>
       ) : filteredItems.length === 0 ? (
@@ -232,6 +230,16 @@ export default function MusicPage() {
           ))}
         </div>
       )}
-    </main>
+    </div>
+  );
+}
+
+export default function MusicPage() {
+  return (
+    <Suspense
+      fallback={<div className="p-8 text-zinc-500">Loading Music...</div>}
+    >
+      <MusicContent />
+    </Suspense>
   );
 }

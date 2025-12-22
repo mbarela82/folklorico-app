@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
+import API_URL from "@/lib/api";
 
 // ==========================================
 // 1. CORE DATA HOOKS
@@ -212,7 +213,7 @@ export async function deleteUser(userId: string) {
   if (!session) throw new Error("No active session");
 
   // 2. Call the Python Backend
-  const response = await fetch(`http://127.0.0.1:8000/admin/users/${userId}`, {
+  const response = await fetch(`${API_URL}/admin/users/${userId}`, {
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${session.access_token}`,
