@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Sarape Folklorico",
     short_name: "Sarape",
     description: "Practice and Rehearsal Companion",
-    start_url: "/dashboard", // When they open the app, go here
+    start_url: "/", // When they open the app, go here
     display: "standalone", // Hides the browser UI (URL bar, etc)
     background_color: "#09090b", // Matches your zinc-950 background
     theme_color: "#4f46e5", // Matches your indigo-600 brand
@@ -15,11 +15,13 @@ export default function manifest(): MetadataRoute.Manifest {
         src: "/icon-192.png",
         sizes: "192x192",
         type: "image/png",
+        purpose: "any maskable",
       },
       {
         src: "/icon-512.png",
         sizes: "512x512",
         type: "image/png",
+        purpose: "any maskable",
       },
       {
         src: "/apple-icon.png", // Special for iPhones
