@@ -125,7 +125,6 @@ def convert_video_to_mp4(input_path: Path) -> Optional[Path]:
         print(f"General Video Conversion Error: {str(e)}")
         return None
 
-# --- CORRECTED: CONVERT TO M4A ---
 def convert_audio_to_m4a(input_path: Path) -> Optional[Path]:
     """Converts input audio to M4A (AAC)."""
     output_path = input_path.with_suffix(".m4a")
@@ -149,11 +148,10 @@ def convert_audio_to_m4a(input_path: Path) -> Optional[Path]:
         print(f"General Audio Conversion Error: {str(e)}")
         return None
 
-# --- UPDATED: SUPPORT FOLDERS ---
 def upload_file_to_r2(file_path: Path, content_type: str, folder: str) -> str:
     """Uploads a local file to R2 inside a specific folder and returns the public URL."""
     file_name = file_path.name
-    # Create object key with folder prefix (e.g., "video/myfile.mp4")
+    # Create object key with folder prefix (e.g., "mp4/myfile.mp4")
     object_key = f"{folder}/{file_name}"
     
     try:
@@ -200,7 +198,7 @@ async def upload_and_process(
         
         thumbnail_url = None
 
-        # 3A. Handle VIDEO -> Folder: "video"
+        # 3A. Handle VIDEO -> Folder: "mp4"
         if is_video:
             thumb_path = generate_thumbnail(temp_file_path)
             if thumb_path and thumb_path.exists():
@@ -212,16 +210,18 @@ async def upload_and_process(
                 final_upload_path = converted_path
                 final_content_type = "video/mp4"
             
-            folder_name = "video"
+            # FIXED: Explicit folder name "mp4"
+            folder_name = "mp4"
 
-        # 3B. Handle AUDIO -> Folder: "audio"
+        # 3B. Handle AUDIO -> Folder: "m4a"
         elif is_audio:
             converted_path = convert_audio_to_m4a(temp_file_path)
             if converted_path and converted_path.exists():
                 final_upload_path = converted_path
-                final_content_type = "audio/mp4" # Correct MIME type for .m4a
+                final_content_type = "audio/mp4" 
             
-            folder_name = "audio"
+            # FIXED: Explicit folder name "m4a"
+            folder_name = "m4a"
 
         # 4. Upload Final File to the correct folder
         public_url = upload_file_to_r2(final_upload_path, final_content_type, folder_name)
