@@ -99,13 +99,10 @@ def generate_thumbnail(video_path: Path) -> Optional[Path]:
         print(f"Thumbnail Generation Error: {str(e)}")
         return None
 
-# --- NEW FUNCTION: CONVERT VIDEO ---
 def convert_video_to_mp4(input_path: Path) -> Optional[Path]:
     """Converts input video to browser-compatible MP4 (H.264/AAC)."""
     output_path = input_path.with_suffix(".mp4")
     try:
-        # If the input is already MP4, we still process it to ensure 
-        # it has the right web-friendly codecs (h264/aac)
         (
             ffmpeg
             .input(str(input_path))
@@ -114,8 +111,8 @@ def convert_video_to_mp4(input_path: Path) -> Optional[Path]:
                 vcodec='libx264', 
                 acodec='aac', 
                 strict='experimental',
-                preset='fast', # Speed up conversion at slight cost of file size
-                movflags='+faststart' # Critical for streaming in browser
+                preset='fast',
+                movflags='+faststart'
             )
             .overwrite_output()
             .run(capture_stdout=True, capture_stderr=True)
@@ -125,23 +122,51 @@ def convert_video_to_mp4(input_path: Path) -> Optional[Path]:
         print(f"Video Conversion Error: {e.stderr.decode('utf8')}")
         return None
     except Exception as e:
-        print(f"General Conversion Error: {str(e)}")
+        print(f"General Video Conversion Error: {str(e)}")
         return None
 
-def upload_file_to_r2(file_path: Path, content_type: str) -> str:
-    """Uploads a local file to R2 and returns the public URL."""
+# --- CORRECTED: CONVERT TO M4A ---
+def convert_audio_to_m4a(input_path: Path) -> Optional[Path]:
+    """Converts input audio to M4A (AAC)."""
+    output_path = input_path.with_suffix(".m4a")
+    try:
+        (
+            ffmpeg
+            .input(str(input_path))
+            .output(
+                str(output_path),
+                acodec='aac',      # Use AAC codec for M4A
+                audio_bitrate='192k'
+            )
+            .overwrite_output()
+            .run(capture_stdout=True, capture_stderr=True)
+        )
+        return output_path
+    except ffmpeg.Error as e:
+        print(f"Audio Conversion Error: {e.stderr.decode('utf8')}")
+        return None
+    except Exception as e:
+        print(f"General Audio Conversion Error: {str(e)}")
+        return None
+
+# --- UPDATED: SUPPORT FOLDERS ---
+def upload_file_to_r2(file_path: Path, content_type: str, folder: str) -> str:
+    """Uploads a local file to R2 inside a specific folder and returns the public URL."""
     file_name = file_path.name
+    # Create object key with folder prefix (e.g., "video/myfile.mp4")
+    object_key = f"{folder}/{file_name}"
+    
     try:
         s3_client.upload_file(
             str(file_path),
             R2_BUCKET_NAME,
-            file_name,
+            object_key,
             ExtraArgs={
                 'ContentType': content_type,
                 'ACL': 'public-read'
             }
         )
-        return f"{R2_PUBLIC_DOMAIN}/{file_name}"
+        return f"{R2_PUBLIC_DOMAIN}/{object_key}"
     except Exception as e:
         raise Exception(f"Failed to upload {file_name} to R2: {str(e)}")
 
@@ -167,26 +192,39 @@ async def upload_and_process(
         temp_file_path = save_upload_file_tmp(file)
         final_upload_path = temp_file_path
         final_content_type = file.content_type
+        folder_name = "misc" # Default fallback
         
-        # 2. If it's a video, process it
+        # 2. Determine Media Type
         is_video = file.content_type.startswith("video")
+        is_audio = file.content_type.startswith("audio")
+        
         thumbnail_url = None
 
+        # 3A. Handle VIDEO -> Folder: "video"
         if is_video:
-            # Generate Thumbnail
             thumb_path = generate_thumbnail(temp_file_path)
             if thumb_path and thumb_path.exists():
-                thumbnail_url = upload_file_to_r2(thumb_path, "image/jpeg")
+                # Thumbnails go to "thumbnails" folder
+                thumbnail_url = upload_file_to_r2(thumb_path, "image/jpeg", "thumbnails")
             
-            # Convert Video
             converted_path = convert_video_to_mp4(temp_file_path)
             if converted_path and converted_path.exists():
-                # Swap the pointer: Upload the converted file instead of the raw one
                 final_upload_path = converted_path
                 final_content_type = "video/mp4"
+            
+            folder_name = "video"
 
-        # 3. Upload Main Media File (Either raw audio/image OR converted video)
-        public_url = upload_file_to_r2(final_upload_path, final_content_type)
+        # 3B. Handle AUDIO -> Folder: "audio"
+        elif is_audio:
+            converted_path = convert_audio_to_m4a(temp_file_path)
+            if converted_path and converted_path.exists():
+                final_upload_path = converted_path
+                final_content_type = "audio/mp4" # Correct MIME type for .m4a
+            
+            folder_name = "audio"
+
+        # 4. Upload Final File to the correct folder
+        public_url = upload_file_to_r2(final_upload_path, final_content_type, folder_name)
 
         return {
             "public_url": public_url,
@@ -199,8 +237,7 @@ async def upload_and_process(
         raise HTTPException(status_code=500, detail=str(e))
         
     finally:
-        # 4. CLEANUP
-        # We wrap these in try/except to ensure one failure doesn't stop cleanup
+        # 5. CLEANUP
         for path in [temp_file_path, converted_path, thumb_path]:
             try:
                 if path and path.exists():
@@ -211,6 +248,8 @@ async def upload_and_process(
 @app.delete("/media/{media_id}")
 async def delete_media(media_id: str, user=Depends(get_current_user)):
     try:
+        # Note: To delete from R2 properly, you'd need the file path stored in DB
+        # For now we just remove the DB entry
         response = supabase.table("media_items").delete().eq("id", media_id).execute()
         return {"message": "Media deleted successfully"}
     except Exception as e:
