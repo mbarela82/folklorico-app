@@ -4,8 +4,11 @@ import { useState, useMemo, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { Video, PlusCircle, MapPin, Filter } from "lucide-react";
+
+// --- IMPORTS ---
+import { supabase } from "@/lib/supabaseClient"; // Clean, top-level import
+import API_URL from "@/lib/api";
 import { useRegions, useMediaLibrary, useProfile } from "@/hooks/useTroupeData";
-import API_URL from "@/lib/api"; // <--- IMPORT THIS
 import MediaCard from "@/components/MediaCard";
 import PracticeStudio from "@/components/PracticeStudio";
 import UploadModal from "@/components/UploadModal";
@@ -70,35 +73,45 @@ function VideoContent() {
     queryClient.invalidateQueries({ queryKey: ["regions", "video"] });
   };
 
-  // --- UPDATED DELETE FUNCTION ---
+  // --- FIXED DELETE FUNCTION ---
   const handleDelete = async () => {
     if (!deleteId) return;
     try {
-      // CHANGE: Use API_URL
+      // 1. Get Session Token Cleanly
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      if (!token) {
+        setToast({ msg: "You must be logged in to delete", type: "error" });
+        return;
+      }
+
+      // 2. Call Backend with Token
       const response = await fetch(`${API_URL}/media/${deleteId}`, {
         method: "DELETE",
         headers: {
-          Authorization: `Bearer ${(
-            await import("@/lib/supabaseClient")
-          ).supabase.auth
-            .getSession()
-            .then(({ data }) => data.session?.access_token)}`,
+          Authorization: `Bearer ${token}`,
         },
       });
-      if (!response.ok) throw new Error("Failed to delete video");
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.detail || "Failed to delete video");
+      }
 
       refreshData();
       setToast({ msg: "Video deleted successfully", type: "success" });
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      setToast({ msg: "Error deleting video", type: "error" });
+      setToast({ msg: error.message || "Error deleting video", type: "error" });
     }
     setDeleteId(null);
   };
 
   return (
     <div className="flex-1 p-4 md:p-8 overflow-y-auto h-full pb-24 md:pb-8">
-      {/* (Keep JSX same as before) */}
       {toast && (
         <Toast
           message={toast.msg}
@@ -147,7 +160,7 @@ function VideoContent() {
         onClose={() => setDeleteId(null)}
         onConfirm={handleDelete}
         title="Delete Video?"
-        message="This cannot be undone."
+        message="This will remove the file permanently. It cannot be undone."
         type="danger"
         confirmText="Yes, Delete"
       />

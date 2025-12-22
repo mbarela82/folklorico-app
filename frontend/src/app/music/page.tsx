@@ -5,8 +5,10 @@ import { useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { Music, PlusCircle, MapPin, Filter } from "lucide-react";
 
+// --- IMPORTS ---
+import { supabase } from "@/lib/supabaseClient"; // Clean import
+import API_URL from "@/lib/api"; // Centralized API URL
 import { useRegions, useMediaLibrary, useProfile } from "@/hooks/useTroupeData";
-import API_URL from "@/lib/api"; // <--- IMPORT THIS
 import MediaCard from "@/components/MediaCard";
 import PracticeStudio from "@/components/PracticeStudio";
 import UploadModal from "@/components/UploadModal";
@@ -26,7 +28,6 @@ function MusicContent() {
   const searchParams = useSearchParams();
   const playId = searchParams.get("play");
 
-  // ... (keep all state and hooks the same) ...
   const [selectedRegion, setSelectedRegion] = useState<string>("All");
   const [filterTag, setFilterTag] = useState<string | null>(null);
   const { data: regions = [] } = useRegions("audio");
@@ -72,37 +73,45 @@ function MusicContent() {
     queryClient.invalidateQueries({ queryKey: ["regions", "audio"] });
   };
 
-  // --- UPDATED DELETE FUNCTION ---
+  // --- FIXED DELETE FUNCTION ---
   const handleDelete = async () => {
     if (!deleteId) return;
     try {
-      // CHANGE: Use API_URL
+      // 1. Get the current session token cleanly
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      if (!token) {
+        setToast({ msg: "You must be logged in to delete", type: "error" });
+        return;
+      }
+
+      // 2. Call the Backend with the token
       const response = await fetch(`${API_URL}/media/${deleteId}`, {
         method: "DELETE",
-        // Note: You likely need auth headers here if your backend checks for Admins
         headers: {
-          Authorization: `Bearer ${(
-            await import("@/lib/supabaseClient")
-          ).supabase.auth
-            .getSession()
-            .then(({ data }) => data.session?.access_token)}`,
+          Authorization: `Bearer ${token}`, // Pass the token!
         },
       });
-      if (!response.ok) throw new Error("Failed to delete media");
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.detail || "Failed to delete media");
+      }
 
       refreshData();
       setToast({ msg: "Track deleted successfully", type: "success" });
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      setToast({ msg: "Error deleting item", type: "error" });
+      setToast({ msg: error.message || "Error deleting item", type: "error" });
     }
     setDeleteId(null);
   };
 
   return (
     <div className="flex-1 p-4 md:p-8 overflow-y-auto h-full pb-24 md:pb-8">
-      {/* ... (Keep your existing JSX exactly the same) ... */}
-      {/* Just making sure the import above is correct is the main thing */}
       {toast && (
         <Toast
           message={toast.msg}
@@ -156,7 +165,7 @@ function MusicContent() {
         confirmText="Yes, Delete"
       />
 
-      {/* Header and Grid Section (Same as before) */}
+      {/* Header and Grid Section */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-4">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">

@@ -254,8 +254,35 @@ async def upload_and_process(
 @app.delete("/media/{media_id}")
 async def delete_media(media_id: str, user=Depends(get_current_user)):
     try:
-        response = supabase.table("media_items").delete().eq("id", media_id).execute()
-        return {"message": "Media deleted successfully"}
+        # 1. Fetch the file path from DB so we know what to delete
+        data = supabase.table("media_items").select("file_path", "media_type").eq("id", media_id).execute()
+        
+        if data.data and len(data.data) > 0:
+            item = data.data[0]
+            file_url = item["file_path"]
+            
+            # Extract object key from URL (e.g., "m4a/filename.m4a")
+            # Assuming URL is like: https://public-domain.com/m4a/filename.m4a
+            if R2_PUBLIC_DOMAIN in file_url:
+                object_key = file_url.replace(f"{R2_PUBLIC_DOMAIN}/", "")
+                
+                # Delete from R2
+                try:
+                    s3_client.delete_object(Bucket=R2_BUCKET_NAME, Key=object_key)
+                    
+                    # If it's a video, try to delete the thumbnail too
+                    if item["media_type"] == "video":
+                        thumb_key = object_key.replace("mp4/", "thumbnails/").replace(".mp4", ".jpg")
+                        s3_client.delete_object(Bucket=R2_BUCKET_NAME, Key=thumb_key)
+                        
+                except Exception as boto_err:
+                    print(f"Warning: R2 file deletion failed: {boto_err}")
+
+        # 2. Delete from Database
+        supabase.table("media_items").delete().eq("id", media_id).execute()
+        
+        return {"message": "Media and files deleted successfully"}
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
