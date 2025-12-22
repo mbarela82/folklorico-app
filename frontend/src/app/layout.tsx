@@ -10,7 +10,7 @@ import Providers from "@/app/providers";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Sarape - Folklorico Companion",
+  title: "Sarape",
   description: "Practice and management for the troupe.",
   manifest: "/manifest.json",
 };
