@@ -20,11 +20,9 @@ app = FastAPI()
 # 1. CONFIGURATION
 # ==========================================
 
-# Define allowed origins
 origins = [
     "http://localhost:3000",
     "https://folklorico-app.vercel.app", 
-    # Add your Vercel URL here
 ]
 
 app.add_middleware(
@@ -35,7 +33,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize Clients
 supabase: Client = create_client(
     os.getenv("SUPABASE_URL"),
     os.getenv("SUPABASE_SERVICE_ROLE_KEY")
@@ -52,7 +49,6 @@ s3_client = boto3.client(
 R2_BUCKET_NAME = os.getenv("R2_BUCKET_NAME")
 R2_PUBLIC_DOMAIN = os.getenv("R2_PUBLIC_DOMAIN")
 
-# Create a temp directory for processing
 TEMP_DIR = Path("temp")
 TEMP_DIR.mkdir(exist_ok=True)
 
@@ -87,23 +83,49 @@ def save_upload_file_tmp(upload_file: UploadFile) -> Path:
         upload_file.file.close()
 
 def generate_thumbnail(video_path: Path) -> Optional[Path]:
-    """Use FFmpeg to generate a thumbnail from a video file."""
+    """Use FFmpeg to generate a JPG thumbnail from a video."""
     thumb_path = video_path.with_suffix(".jpg")
     try:
         (
             ffmpeg
-            .input(str(video_path), ss=1) # Capture at 1 second mark
-            .filter('scale', 800, -1)     # Resize width to 800px, keep aspect ratio
+            .input(str(video_path), ss=1)
+            .filter('scale', 800, -1)
             .output(str(thumb_path), vframes=1)
             .overwrite_output()
             .run(capture_stdout=True, capture_stderr=True)
         )
         return thumb_path
-    except ffmpeg.Error as e:
-        print(f"FFmpeg Error: {e.stderr.decode('utf8')}")
-        return None
     except Exception as e:
         print(f"Thumbnail Generation Error: {str(e)}")
+        return None
+
+# --- NEW FUNCTION: CONVERT VIDEO ---
+def convert_video_to_mp4(input_path: Path) -> Optional[Path]:
+    """Converts input video to browser-compatible MP4 (H.264/AAC)."""
+    output_path = input_path.with_suffix(".mp4")
+    try:
+        # If the input is already MP4, we still process it to ensure 
+        # it has the right web-friendly codecs (h264/aac)
+        (
+            ffmpeg
+            .input(str(input_path))
+            .output(
+                str(output_path), 
+                vcodec='libx264', 
+                acodec='aac', 
+                strict='experimental',
+                preset='fast', # Speed up conversion at slight cost of file size
+                movflags='+faststart' # Critical for streaming in browser
+            )
+            .overwrite_output()
+            .run(capture_stdout=True, capture_stderr=True)
+        )
+        return output_path
+    except ffmpeg.Error as e:
+        print(f"Video Conversion Error: {e.stderr.decode('utf8')}")
+        return None
+    except Exception as e:
+        print(f"General Conversion Error: {str(e)}")
         return None
 
 def upload_file_to_r2(file_path: Path, content_type: str) -> str:
@@ -137,24 +159,34 @@ async def upload_and_process(
     user=Depends(get_current_user)
 ):
     temp_file_path = None
+    converted_path = None
     thumb_path = None
     
     try:
-        # 1. Save file to disk temporarily
+        # 1. Save raw file to disk
         temp_file_path = save_upload_file_tmp(file)
+        final_upload_path = temp_file_path
+        final_content_type = file.content_type
         
-        # 2. Check if it's a video to generate thumbnail
+        # 2. If it's a video, process it
         is_video = file.content_type.startswith("video")
         thumbnail_url = None
 
         if is_video:
+            # Generate Thumbnail
             thumb_path = generate_thumbnail(temp_file_path)
             if thumb_path and thumb_path.exists():
-                # Upload Thumbnail
                 thumbnail_url = upload_file_to_r2(thumb_path, "image/jpeg")
+            
+            # Convert Video
+            converted_path = convert_video_to_mp4(temp_file_path)
+            if converted_path and converted_path.exists():
+                # Swap the pointer: Upload the converted file instead of the raw one
+                final_upload_path = converted_path
+                final_content_type = "video/mp4"
 
-        # 3. Upload Main Media File
-        public_url = upload_file_to_r2(temp_file_path, file.content_type)
+        # 3. Upload Main Media File (Either raw audio/image OR converted video)
+        public_url = upload_file_to_r2(final_upload_path, final_content_type)
 
         return {
             "public_url": public_url,
@@ -167,20 +199,19 @@ async def upload_and_process(
         raise HTTPException(status_code=500, detail=str(e))
         
     finally:
-        # 4. CLEANUP: Delete temp files
-        if temp_file_path and temp_file_path.exists():
-            os.remove(temp_file_path)
-        if thumb_path and thumb_path.exists():
-            os.remove(thumb_path)
+        # 4. CLEANUP
+        # We wrap these in try/except to ensure one failure doesn't stop cleanup
+        for path in [temp_file_path, converted_path, thumb_path]:
+            try:
+                if path and path.exists():
+                    os.remove(path)
+            except:
+                pass
 
 @app.delete("/media/{media_id}")
 async def delete_media(media_id: str, user=Depends(get_current_user)):
     try:
-        # 1. Get the file path from DB to know what to delete in R2 (Optional/Advanced)
-        # For now, we just delete the DB record to keep it simple.
-        # Use Supabase Service Role to bypass RLS for cleanup if needed
         response = supabase.table("media_items").delete().eq("id", media_id).execute()
-        
         return {"message": "Media deleted successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -188,8 +219,6 @@ async def delete_media(media_id: str, user=Depends(get_current_user)):
 @app.delete("/admin/users/{user_id}")
 async def delete_user(user_id: str, user=Depends(get_current_user)):
     try:
-        # Check if requester is actually an admin (Optional extra security)
-        # For now, relying on Frontend Admin check + Supabase RLS is okay for MVP
         supabase.auth.admin.delete_user(user_id)
         return {"message": "User deleted successfully"}
     except Exception as e:
@@ -197,5 +226,4 @@ async def delete_user(user_id: str, user=Depends(get_current_user)):
 
 if __name__ == "__main__":
     import uvicorn
-    # This allows you to run "python app/main.py" locally
     uvicorn.run("app.main:app", host="127.0.0.1", port=8000, reload=True)
