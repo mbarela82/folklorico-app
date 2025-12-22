@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+supabase
+python-multipart
+python-dotenv
+ffmpeg-python
