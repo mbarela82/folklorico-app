@@ -2,7 +2,7 @@ import { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Sarape Folklorico",
+    name: "Sarape",
     short_name: "Sarape",
     description: "Practice and Rehearsal Companion",
     start_url: "/", // When they open the app, go here

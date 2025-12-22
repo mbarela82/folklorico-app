@@ -88,7 +88,17 @@ export async function middleware(request: NextRequest) {
 // frontend/src/middleware.ts
 export const config = {
   matcher: [
-    // exclude static assets, images, favicon, AND auth/callback
-    "/((?!_next/static|_next/image|favicon.ico|auth/callback|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - sw.js (Service Worker - CRITICAL)
+     * - workbox- (Workbox Files - CRITICAL)
+     * - manifest.webmanifest (Manifest - CRITICAL)
+     * - auth/callback (Supabase Auth)
+     * - images (svg, png, etc.)
+     */
+    "/((?!_next/static|_next/image|favicon.ico|sw.js|workbox-|manifest.webmanifest|auth/callback|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
