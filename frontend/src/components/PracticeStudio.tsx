@@ -95,6 +95,16 @@ export default function PracticeStudio({
   const { logEvent } = useAnalytics();
   const hasLoggedPlay = useRef(false);
 
+  // --- HELPER: FORCE HTTPS ---
+  // This is the Magic Fix. It ensures even "broken" URLs in the DB play correctly.
+  const getValidUrl = (path: string | null) => {
+    if (!path) return "";
+    if (path.startsWith("http://") || path.startsWith("https://")) {
+      return path;
+    }
+    return `https://${path}`;
+  };
+
   // --- LOOP LOGIC ---
   const clearLoop = () => {
     loopRef.current = { a: null, b: null, active: false };
@@ -156,7 +166,8 @@ export default function PracticeStudio({
         barWidth: 2,
         barGap: 3,
         height: 150,
-        url: media.file_path,
+        // FIX: Use the valid URL helper
+        url: getValidUrl(media.file_path),
         normalize: true,
       });
 
@@ -186,7 +197,7 @@ export default function PracticeStudio({
     }
   }, [media]);
 
-  // Track mobile breakpoint (used only to enable portrait-mobile layout)
+  // Track mobile breakpoint
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 767px)");
     const set = () => setIsMobile(mq.matches);
@@ -199,7 +210,7 @@ export default function PracticeStudio({
     };
   }, []);
 
-  // Compute bottom inset ONLY for portrait-video mobile layout (so fullscreen/music stay original)
+  // Compute bottom inset ONLY for portrait-video mobile layout
   useEffect(() => {
     if (!media || media.media_type !== "video" || !isMobile || !isVerticalVideo)
       return;
@@ -212,8 +223,6 @@ export default function PracticeStudio({
         0,
         window.innerHeight - (height + offsetTop)
       );
-
-      // Conservative minimum for gesture nav across Pixels/Samsungs + PWA
       const minInset = 96;
       setMobileBottomInset(Math.max(minInset, Math.round(bottomObscured)));
     };
@@ -230,10 +239,9 @@ export default function PracticeStudio({
     };
   }, [media, isMobile, isVerticalVideo]);
 
-  // Micro-polish: scroll drawer to add form when opening via Mark
+  // Scroll drawer to add form
   useEffect(() => {
     if (!isDrawerOpen) return;
-
     const t = window.setTimeout(() => {
       if (isAddingMark) {
         addMarkRef.current?.scrollIntoView({
@@ -247,7 +255,6 @@ export default function PracticeStudio({
         });
       }
     }, 50);
-
     return () => window.clearTimeout(t);
   }, [isDrawerOpen, isAddingMark]);
 
@@ -331,7 +338,6 @@ export default function PracticeStudio({
     }
   };
 
-  // --- SEEK & JUMP ---
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const time = parseFloat(e.target.value);
     const { a, b, active } = loopRef.current;
@@ -366,7 +372,6 @@ export default function PracticeStudio({
     }
   };
 
-  // ORIGINAL fullscreen logic (unchanged)
   const toggleFullScreen = () => {
     if (videoRef.current) {
       if (!document.fullscreenElement) {
@@ -390,7 +395,6 @@ export default function PracticeStudio({
     }
   };
 
-  // --- BOOKMARK CRUD ---
   const handleSaveBookmark = async () => {
     if (!media) return;
 
@@ -455,7 +459,6 @@ export default function PracticeStudio({
       className="p-4 border-t border-zinc-800 bg-zinc-950"
       style={{ paddingBottom: mobileBottomInset + 16 }}
     >
-      {/* time + speed */}
       <div className="mb-3 flex items-center justify-between">
         <div className="text-xs text-zinc-500 font-mono">
           {formatTime(currentTime)} / {formatTime(duration)}
@@ -469,11 +472,8 @@ export default function PracticeStudio({
         </button>
       </div>
 
-      {/* scrubber (video only) */}
       <div className="mb-4 relative h-2 group/scrubber">
         <div className="absolute inset-0 bg-zinc-700 rounded-lg z-0" />
-
-        {/* loop box */}
         {activeLoopId && loopA !== null && (
           <div
             className="absolute top-0 bottom-0 bg-indigo-500/30 pointer-events-none z-0"
@@ -485,8 +485,6 @@ export default function PracticeStudio({
             }}
           />
         )}
-
-        {/* bookmark ticks */}
         <div className="absolute top-0 w-full h-full z-10 pointer-events-none">
           {bookmarks.map((b) => (
             <div
@@ -500,22 +498,17 @@ export default function PracticeStudio({
             />
           ))}
         </div>
-
         <input
           type="range"
           min="0"
           max={duration}
           value={currentTime}
           onChange={handleSeek}
-          className="absolute inset-0 w-full h-full appearance-none bg-transparent cursor-pointer z-20 focus:outline-none
-          [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3
-          [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-lg"
+          className="absolute inset-0 w-full h-full appearance-none bg-transparent cursor-pointer z-20 focus:outline-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-lg"
         />
       </div>
 
-      {/* playback buttons */}
       <div className="flex items-center justify-between max-w-md mx-auto gap-2">
-        {/* Mark: open drawer + show add form */}
         <button
           onClick={() => {
             setIsDrawerOpen(true);
@@ -528,14 +521,12 @@ export default function PracticeStudio({
           <Bookmark size={20} fill={isAddingMark ? "currentColor" : "none"} />
           <span className="text-[10px]">Mark</span>
         </button>
-
         <button
           onClick={() => skip(-5)}
           className="text-zinc-400 hover:text-white"
         >
           <SkipBack size={24} />
         </button>
-
         <button
           onClick={togglePlay}
           className="w-12 h-12 bg-indigo-600 hover:bg-indigo-500 rounded-full flex items-center justify-center text-white shadow-lg hover:scale-105 transition-all"
@@ -546,20 +537,17 @@ export default function PracticeStudio({
             <Play size={24} fill="currentColor" className="ml-1" />
           )}
         </button>
-
         <button
           onClick={() => skip(5)}
           className="text-zinc-400 hover:text-white"
         >
           <SkipForward size={24} />
         </button>
-
         <button
           onClick={() => setIsMuted(!isMuted)}
           className={`transition-colors ${
             isMuted ? "text-zinc-500" : "text-white"
           }`}
-          title="Mute"
         >
           {isMuted || volume === 0 ? (
             <VolumeX size={20} />
@@ -573,7 +561,6 @@ export default function PracticeStudio({
 
   const DrawerBookmarkContent = () => (
     <>
-      {/* Add mark form */}
       {isAddingMark && (
         <div
           ref={addMarkRef}
@@ -587,7 +574,6 @@ export default function PracticeStudio({
             onChange={(e) => setNewMarkNote(e.target.value)}
             className="w-full bg-black/40 border border-white/10 rounded p-2 text-sm text-white mb-2 focus:border-indigo-500 outline-none"
           />
-
           {(userRole === "teacher" || userRole === "admin") && (
             <div
               onClick={() => setIsNewMarkPublic(!isNewMarkPublic)}
@@ -607,7 +593,6 @@ export default function PracticeStudio({
               <span>Make Public (Teacher Note)</span>
             </div>
           )}
-
           <div className="flex gap-2">
             <button
               onClick={handleSaveBookmark}
@@ -624,8 +609,6 @@ export default function PracticeStudio({
           </div>
         </div>
       )}
-
-      {/* Loop status */}
       {activeLoopId && (
         <div className="mb-3 px-3 py-3 bg-indigo-900/20 border border-indigo-500/30 rounded-lg flex flex-col gap-3 animate-in fade-in">
           <div className="flex items-center justify-between">
@@ -656,7 +639,6 @@ export default function PracticeStudio({
           </div>
         </div>
       )}
-
       <BookmarkList
         bookmarks={bookmarks}
         currentUserId={currentUserId}
@@ -665,12 +647,11 @@ export default function PracticeStudio({
         onJump={(time, id) => {
           setSelectedBookmarkId(id);
           jumpTo(time);
-          setIsDrawerOpen(false); // close drawer on jump
+          setIsDrawerOpen(false);
         }}
         onLoop={(mark) => {
           setSelectedBookmarkId(mark.id);
           toggleBookmarkLoop(mark);
-          // do NOT close drawer on loop toggle
         }}
         onDelete={(id) => handleDeleteBookmark(id)}
         formatTime={formatTime}
@@ -684,18 +665,14 @@ export default function PracticeStudio({
         isDrawerOpen ? "" : "pointer-events-none"
       }`}
     >
-      {/* overlay */}
       <div
         className={`absolute inset-0 bg-black/35 transition-opacity ${
           isDrawerOpen ? "opacity-100" : "opacity-0"
         }`}
         onClick={() => setIsDrawerOpen(false)}
       />
-
-      {/* drawer */}
       <div
-        className={`absolute top-0 right-0 h-full w-[85%] max-w-sm bg-black/55 backdrop-blur-md border-l border-white/10
-        transition-transform ${
+        className={`absolute top-0 right-0 h-full w-[85%] max-w-sm bg-black/55 backdrop-blur-md border-l border-white/10 transition-transform ${
           isDrawerOpen ? "translate-x-0" : "translate-x-full"
         }`}
       >
@@ -703,7 +680,6 @@ export default function PracticeStudio({
           <div className="text-xs font-bold uppercase tracking-wider text-zinc-200">
             Bookmarks
           </div>
-
           <button
             onClick={() => setIsDrawerOpen(false)}
             className="p-2 hover:bg-white/10 rounded-full text-zinc-200"
@@ -711,7 +687,6 @@ export default function PracticeStudio({
             <X size={20} />
           </button>
         </div>
-
         <div className="p-4 overflow-y-auto h-[calc(100%-64px)]">
           <div ref={drawerTopRef} />
           <DrawerBookmarkContent />
@@ -724,7 +699,6 @@ export default function PracticeStudio({
 
   return (
     <div className="fixed inset-0 z-50 bg-zinc-950 flex flex-col animate-in slide-in-from-bottom duration-300">
-      {/* HEADER */}
       <div className="flex items-center justify-between p-4 border-b border-zinc-900 shrink-0 bg-zinc-950 relative z-50">
         <div className="text-center flex-1 px-4 overflow-hidden">
           <h2 className="font-bold text-white text-lg truncate">
@@ -742,17 +716,16 @@ export default function PracticeStudio({
         </button>
       </div>
 
-      {/* BODY */}
       {usePortraitMobileLayout ? (
         <div
           className="flex-1 md:hidden flex flex-col overflow-hidden bg-black"
           style={{ paddingBottom: mobileBottomInset }}
         >
-          {/* Video */}
           <div className="relative bg-black flex items-center justify-center px-2 pt-2">
             <video
               ref={videoRef}
-              src={media.file_path}
+              // FIX: Use the valid URL helper
+              src={getValidUrl(media.file_path)}
               playsInline
               className="w-full max-h-[52vh] object-contain transition-transform duration-300"
               style={{ transform: isMirrored ? "scaleX(-1)" : "none" }}
@@ -765,8 +738,6 @@ export default function PracticeStudio({
               onEnded={() => setIsPlaying(false)}
               onClick={togglePlay}
             />
-
-            {/* Top-right controls */}
             <div className="absolute top-3 right-3 flex gap-2">
               <button
                 onClick={() => setIsMirrored(!isMirrored)}
@@ -775,47 +746,37 @@ export default function PracticeStudio({
                     ? "bg-indigo-600 text-white"
                     : "bg-black/50 text-white"
                 }`}
-                title="Mirror Video (for learning)"
               >
                 <FlipHorizontal size={18} />
               </button>
-
               <button
                 onClick={toggleFullScreen}
                 className="p-2 bg-black/50 text-white rounded-lg"
-                title="Fullscreen"
               >
                 <Maximize size={18} />
               </button>
-
               <button
                 onClick={() => setIsDrawerOpen(true)}
                 className="p-2 bg-black/50 text-white rounded-lg"
-                title="Bookmarks"
               >
                 <Bookmark size={18} />
               </button>
             </div>
           </div>
-
-          {/* Controls below video */}
           <div className="shrink-0">
             <MobileVerticalControls />
           </div>
-
-          {/* Drawer */}
           <MobileSideDrawer />
         </div>
       ) : (
-        // ORIGINAL BODY (kept as-is, except we add onLoadedMetadata to detect portrait for the mobile-only branch)
         <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
-          {/* LEFT: MEDIA (Z-0) */}
           <div className="relative z-0 bg-black flex items-center justify-center shrink-0 h-auto min-h-[30vh] md:h-full md:w-[70%] md:border-r md:border-zinc-800 group min-h-0">
             {media.media_type === "video" && (
               <>
                 <video
                   ref={videoRef}
-                  src={media.file_path}
+                  // FIX: Use the valid URL helper
+                  src={getValidUrl(media.file_path)}
                   playsInline
                   className="w-auto h-auto max-h-[60vh] md:w-full md:h-full object-contain transition-transform duration-300"
                   style={{ transform: isMirrored ? "scaleX(-1)" : "none" }}
@@ -836,7 +797,6 @@ export default function PracticeStudio({
                         ? "bg-indigo-600 text-white"
                         : "bg-black/50 text-white"
                     }`}
-                    title="Mirror Video (for learning)"
                   >
                     <FlipHorizontal size={20} />
                   </button>
@@ -850,7 +810,6 @@ export default function PracticeStudio({
               </>
             )}
 
-            {/* AUDIO WAVEFORM */}
             {media.media_type === "audio" && (
               <div className="w-full px-4 md:px-12">
                 <div className="relative w-full">
@@ -871,10 +830,8 @@ export default function PracticeStudio({
             )}
           </div>
 
-          {/* RIGHT: CONTROLS (Z-10) */}
           <div className="flex-1 flex flex-col bg-zinc-900 overflow-hidden md:w-[30%] relative z-10 min-h-0">
             <div className="p-4 border-b border-zinc-800 shrink-0 bg-zinc-900 relative z-50 shadow-xl">
-              {/* ROW 1: TIME & SPEED */}
               <div className="mb-3 flex items-center justify-between">
                 <div className="text-xs text-zinc-500 font-mono">
                   {formatTime(currentTime)} / {formatTime(duration)}
@@ -887,8 +844,6 @@ export default function PracticeStudio({
                   <span>{playbackRate}x</span>
                 </button>
               </div>
-
-              {/* ROW 2: SCRUBBER (Video Only) */}
               {media.media_type === "video" && (
                 <div className="mb-4 relative h-2 group/scrubber">
                   <div className="absolute inset-0 bg-zinc-700 rounded-lg z-0" />
@@ -925,7 +880,6 @@ export default function PracticeStudio({
                 </div>
               )}
 
-              {/* ROW 3: PLAYBACK BUTTONS */}
               <div className="flex items-center justify-between max-w-md mx-auto gap-2">
                 <button
                   onClick={() => setIsAddingMark(!isAddingMark)}
@@ -941,14 +895,12 @@ export default function PracticeStudio({
                   />
                   <span className="text-[10px]">Mark</span>
                 </button>
-
                 <button
                   onClick={() => skip(-5)}
                   className="text-zinc-400 hover:text-white"
                 >
                   <SkipBack size={24} />
                 </button>
-
                 <button
                   onClick={togglePlay}
                   className="w-12 h-12 bg-indigo-600 hover:bg-indigo-500 rounded-full flex items-center justify-center text-white shadow-lg hover:scale-105 transition-all"
@@ -959,15 +911,12 @@ export default function PracticeStudio({
                     <Play size={24} fill="currentColor" className="ml-1" />
                   )}
                 </button>
-
                 <button
                   onClick={() => skip(5)}
                   className="text-zinc-400 hover:text-white"
                 >
                   <SkipForward size={24} />
                 </button>
-
-                {/* Volume */}
                 <div className="flex items-center gap-2 relative">
                   <button
                     onClick={() => setIsMuted(!isMuted)}
@@ -997,9 +946,7 @@ export default function PracticeStudio({
               </div>
             </div>
 
-            {/* --- BOOKMARKS CONTENT (tabs removed) --- */}
             <div className="flex-1 overflow-y-auto p-4 pb-20 md:pb-4 relative z-0">
-              {/* A. ADD BOOKMARK FORM */}
               {isAddingMark && (
                 <div className="mb-4 bg-zinc-950 p-3 rounded-lg border border-indigo-500/50 animate-in fade-in slide-in-from-top-2">
                   <input
@@ -1010,8 +957,6 @@ export default function PracticeStudio({
                     onChange={(e) => setNewMarkNote(e.target.value)}
                     className="w-full bg-zinc-900 border border-zinc-800 rounded p-2 text-sm text-white mb-2 focus:border-indigo-500 outline-none"
                   />
-
-                  {/* TEACHER TOGGLE */}
                   {(userRole === "teacher" || userRole === "admin") && (
                     <div
                       onClick={() => setIsNewMarkPublic(!isNewMarkPublic)}
@@ -1031,7 +976,6 @@ export default function PracticeStudio({
                       <span>Make Public (Teacher Note)</span>
                     </div>
                   )}
-
                   <div className="flex gap-2">
                     <button
                       onClick={handleSaveBookmark}
@@ -1049,7 +993,6 @@ export default function PracticeStudio({
                 </div>
               )}
 
-              {/* B. LOOP STATUS */}
               {activeLoopId && (
                 <div className="mb-3 px-3 py-3 bg-indigo-900/20 border border-indigo-500/30 rounded-lg flex flex-col gap-3 animate-in fade-in">
                   <div className="flex items-center justify-between">
@@ -1064,7 +1007,6 @@ export default function PracticeStudio({
                       <X size={14} />
                     </button>
                   </div>
-                  {/* Duration Buttons */}
                   <div className="flex gap-2">
                     {[5, 10, 15, 20].map((sec) => (
                       <button
@@ -1082,8 +1024,6 @@ export default function PracticeStudio({
                   </div>
                 </div>
               )}
-
-              {/* C. THE LIST */}
               <BookmarkList
                 bookmarks={bookmarks}
                 currentUserId={currentUserId}
