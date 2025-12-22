@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next"; // Import Viewport
 import { Inter } from "next/font/google";
 import "./globals.css";
 
@@ -12,7 +12,17 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Sarape",
   description: "Practice and management for the troupe.",
-  manifest: "/manifest.json",
+  // REMOVE the "manifest" line here.
+  // Next.js automatically detects your manifest.ts file.
+};
+
+// ADD THIS SECTION
+export const viewport: Viewport = {
+  themeColor: "#4f46e5",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false, // This makes it feel like a real app (prevents pinch-zoom)
 };
 
 export default function RootLayout({
@@ -25,20 +35,11 @@ export default function RootLayout({
       <body className={inter.className}>
         <Providers>
           <div className="flex min-h-dvh bg-zinc-950 text-zinc-200">
-            {/* 1. Desktop Sidebar (Left) */}
             <Sidebar />
-
-            {/* 2. Main Content Wrapper */}
             <div className="flex-1 flex flex-col h-full relative">
-              {/* Mobile Top Header */}
               <MobileHeader />
-
-              {/* Scrollable Page Content */}
-              {/* Added pb-24 so content doesn't get cut off by the bottom nav */}
               <main className="flex-1 overflow-y-auto md:pb-0">{children}</main>
             </div>
-
-            {/* 3. Mobile Bottom Nav (Floating Above Everything) */}
             <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-zinc-950">
               <MobileNav />
             </div>
