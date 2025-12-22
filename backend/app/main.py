@@ -254,36 +254,40 @@ async def upload_and_process(
 @app.delete("/media/{media_id}")
 async def delete_media(media_id: str, user=Depends(get_current_user)):
     try:
-        # 1. Fetch the file path from DB so we know what to delete
-        data = supabase.table("media_items").select("file_path", "media_type").eq("id", media_id).execute()
+        # 1. Fetch BOTH file_path and thumbnail_url from the DB
+        data = supabase.table("media_items").select("file_path", "thumbnail_url").eq("id", media_id).execute()
         
         if data.data and len(data.data) > 0:
             item = data.data[0]
-            file_url = item["file_path"]
             
-            # Extract object key from URL (e.g., "m4a/filename.m4a")
-            # Assuming URL is like: https://public-domain.com/m4a/filename.m4a
-            if R2_PUBLIC_DOMAIN in file_url:
-                object_key = file_url.replace(f"{R2_PUBLIC_DOMAIN}/", "")
-                
-                # Delete from R2
-                try:
-                    s3_client.delete_object(Bucket=R2_BUCKET_NAME, Key=object_key)
+            # Define a helper to safely delete any URL from R2
+            def delete_from_r2(url_string):
+                if url_string and R2_PUBLIC_DOMAIN in url_string:
+                    # Clean the URL to get the object key (e.g. "thumbnails/image.jpg")
+                    # We strip the domain and any leading slashes
+                    clean_domain = R2_PUBLIC_DOMAIN.rstrip("/")
+                    object_key = url_string.replace(f"{clean_domain}/", "")
                     
-                    # If it's a video, try to delete the thumbnail too
-                    if item["media_type"] == "video":
-                        thumb_key = object_key.replace("mp4/", "thumbnails/").replace(".mp4", ".jpg")
-                        s3_client.delete_object(Bucket=R2_BUCKET_NAME, Key=thumb_key)
-                        
-                except Exception as boto_err:
-                    print(f"Warning: R2 file deletion failed: {boto_err}")
+                    print(f"Attempting to delete R2 object: {object_key}")
+                    try:
+                        s3_client.delete_object(Bucket=R2_BUCKET_NAME, Key=object_key)
+                    except Exception as boto_err:
+                        print(f"Warning: R2 deletion failed for {object_key}: {boto_err}")
 
-        # 2. Delete from Database
+            # Delete the Main Media File
+            delete_from_r2(item.get("file_path"))
+            
+            # Delete the Thumbnail (Directly from DB value - no guessing!)
+            delete_from_r2(item.get("thumbnail_url"))
+
+        # 2. Delete the record from Supabase
         supabase.table("media_items").delete().eq("id", media_id).execute()
         
-        return {"message": "Media and files deleted successfully"}
+        return {"message": "Media and thumbnail deleted successfully"}
 
     except Exception as e:
+        # Log the error but don't crash the user experience if possible
+        print(f"Delete Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/admin/users/{user_id}")
