@@ -11,38 +11,47 @@ from dotenv import load_dotenv
 # 1. Load Environment Variables
 load_dotenv()
 
-# 2. Setup Supabase Client
+# 2. Setup Supabase Clients
 url: str = os.environ.get("SUPABASE_URL")
 key: str = os.environ.get("SUPABASE_KEY")
+service_key: str = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+
+if not url or not key or not service_key:
+    raise RuntimeError("Missing Supabase credentials in .env file (URL, KEY, or SERVICE_ROLE_KEY)")
+
+# Standard Client (for general read operations)
 supabase: Client = create_client(url, key)
+
+# Admin Client (for Uploads, Deletes, and User Management)
+# This bypasses RLS policies to prevent "403 Unauthorized" errors from the backend.
+supabase_admin: Client = create_client(url, service_key) 
 
 # 3. Initialize FastAPI
 app = FastAPI()
-security = HTTPBearer() # <--- Security Scheme
+security = HTTPBearer()
 
 # 4. Setup CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"], 
+    # Adjust this list to match your production domain if needed
+    allow_origins=["http://localhost:3000", "https://your-production-app.com"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # --- SECURITY DEPENDENCY ---
-# This function runs before the main route logic
 def verify_admin_or_teacher(credentials: HTTPAuthorizationCredentials = Depends(security)):
     token = credentials.credentials
     try:
-        # A. Verify the Token with Supabase Auth
+        # A. Verify the Token
         user_response = supabase.auth.get_user(token)
         if not user_response or not user_response.user:
              raise HTTPException(status_code=401, detail="Invalid authentication token")
         
         user_id = user_response.user.id
 
-        # B. Check Role in Database
-        # We query the 'profiles' table to see if this user is allowed
+        # B. Check Role
         response = supabase.table("profiles").select("role").eq("id", user_id).single().execute()
         
         if not response.data:
@@ -57,16 +66,15 @@ def verify_admin_or_teacher(credentials: HTTPAuthorizationCredentials = Depends(
         return user_id
 
     except Exception as e:
-        # If anything fails (token expired, network error), block access
         print(f"Auth Error: {e}")
         raise HTTPException(status_code=401, detail="Authentication failed")
 
 # --- HELPER FUNCTIONS ---
-
 def get_storage_path(full_url: str):
     if not full_url:
         return None
     try:
+        # Extracts path after /media/ if standard Supabase URL
         parts = full_url.split("/media/")
         if len(parts) > 1:
             return parts[1]
@@ -84,24 +92,21 @@ def read_root():
 @app.post("/upload/convert")
 async def convert_and_upload(
     file: UploadFile = File(...),
-    # The 'user_id' argument triggers the security check defined above
     user_id: str = Depends(verify_admin_or_teacher) 
 ):
-    """
-    Secure upload endpoint. Only admins/teachers can pass the check.
-    """
-    
     # 1. Generate Unique Identifiers
     unique_id = str(uuid.uuid4())[:8]
     original_base = file.filename.split('.')[0]
-    base_name = f"{original_base}_{unique_id}"
+    # Clean filename to avoid issues with special characters
+    safe_base = "".join(c for c in original_base if c.isalnum() or c in ('-','_'))
+    base_name = f"{safe_base}_{unique_id}"
     temp_input = f"temp_{unique_id}_{file.filename}"
     
     # 2. Save Input File Locally
     with open(temp_input, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # 3. Configure Conversion Settings
+    # 3. Configure Conversion
     if "audio" in file.content_type:
         output_ext = "m4a"
         content_type = "audio/mp4"
@@ -141,7 +146,8 @@ async def convert_and_upload(
                     .run(quiet=True, overwrite_output=True)
                 )
                 with open(thumb_output, "rb") as f:
-                    supabase.storage.from_("media").upload(
+                    # UPDATED: Use supabase_admin to bypass RLS
+                    supabase_admin.storage.from_("media").upload(
                         path=f"thumbnails/{thumb_output}",
                         file=f.read(),
                         file_options={"content-type": "image/jpeg"}
@@ -158,7 +164,9 @@ async def convert_and_upload(
         # 6. Upload Main Media
         with open(media_output, "rb") as f:
             storage_path = f"{output_ext}/{os.path.basename(media_output)}"
-            supabase.storage.from_("media").upload(
+            
+            # UPDATED: Use supabase_admin to bypass RLS
+            supabase_admin.storage.from_("media").upload(
                 path=storage_path,
                 file=f.read(),
                 file_options={"content-type": content_type}
@@ -177,7 +185,7 @@ async def convert_and_upload(
         raise HTTPException(status_code=500, detail=str(e))
 
     finally:
-        # Cleanup
+        # Cleanup temp files
         paths_to_clean = [temp_input, media_output]
         if 'thumb_output' in locals() and thumb_output:
             paths_to_clean.append(thumb_output)
@@ -189,14 +197,13 @@ async def convert_and_upload(
                 except Exception:
                     pass
 
-# PROTECTED: Delete Route
+# PROTECTED: Delete Media Route
 @app.delete("/media/{media_id}")
 async def delete_media(
     media_id: str,
-    user_id: str = Depends(verify_admin_or_teacher) # <--- Lock it down
+    user_id: str = Depends(verify_admin_or_teacher)
 ):
     try:
-        # Fetch metadata
         response = supabase.table("media_items").select("*").eq("id", media_id).execute()
         if not response.data:
             raise HTTPException(status_code=404, detail="Item not found")
@@ -211,13 +218,35 @@ async def delete_media(
         if thumb_path: files_to_remove.append(thumb_path)
             
         if files_to_remove:
-            supabase.storage.from_("media").remove(files_to_remove)
+            # UPDATED: Use supabase_admin to bypass RLS
+            supabase_admin.storage.from_("media").remove(files_to_remove)
             
-        # Delete Database Row
-        supabase.table("media_items").delete().eq("id", media_id).execute()
+        # UPDATED: Use supabase_admin to ensure db row is deleted even if RLS is strict
+        supabase_admin.table("media_items").delete().eq("id", media_id).execute()
         
         return {"status": "success", "deleted_id": media_id}
 
     except Exception as e:
         print(f"Delete Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# PROTECTED: Delete User Route
+@app.delete("/admin/users/{target_user_id}")
+async def delete_user_account(
+    target_user_id: str,
+    admin_id: str = Depends(verify_admin_or_teacher)
+):
+    try:
+        # Delete from Supabase Auth using Admin Client
+        # Requires 'ON DELETE CASCADE' in Postgres for profiles/data to clear up
+        supabase_admin.auth.admin.delete_user(target_user_id)
+        
+        return {"status": "success", "message": f"User {target_user_id} deleted"}
+
+    except Exception as e:
+        print(f"Delete User Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("app.main:app", host="127.0.0.1", port=8000, reload=True)

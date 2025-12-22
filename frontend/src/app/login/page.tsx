@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import {
-  Layers,
+  //Layers,
   Loader2,
   Lock,
   Mail,
@@ -12,6 +12,7 @@ import {
   CheckCircle,
 } from "lucide-react"; // Added Icons
 import Toast from "@/components/Toast";
+import BrandLogo from "@/components/BrandLogo";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -84,8 +85,9 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         {/* Brand */}
         <div className="flex justify-center mb-8">
-          <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/30">
-            <Layers size={28} className="text-white" />
+          <div>
+            {/* <Layers size={28} className="text-white" /> */}
+            <BrandLogo size={50} />
           </div>
         </div>
 

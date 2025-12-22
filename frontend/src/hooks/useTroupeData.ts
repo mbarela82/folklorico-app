@@ -123,13 +123,10 @@ export function useAnnouncement() {
   });
 }
 
-// === NOTIFICATION LOGIC REMOVED ===
-// The database trigger 'on_announcement_created' now handles this automatically.
 export async function postAnnouncement(message: string, userId: string) {
   const { error } = await supabase
     .from("announcements")
     .insert({ message, author_id: userId });
-
   if (error) throw error;
 }
 
@@ -152,8 +149,6 @@ export function useEvents() {
   });
 }
 
-// === NOTIFICATION LOGIC REMOVED ===
-// The database trigger 'on_event_created' now handles this automatically.
 export async function createEvent(eventData: any) {
   const {
     data: { user },
@@ -164,7 +159,6 @@ export async function createEvent(eventData: any) {
     ...eventData,
     created_by: user.id,
   });
-
   if (error) throw error;
 }
 
@@ -208,9 +202,27 @@ export async function updateRole(userId: string, newRole: string) {
   if (error) throw error;
 }
 
+// --- UPDATED: Uses Backend API for complete deletion ---
 export async function deleteUser(userId: string) {
-  const { error } = await supabase.from("profiles").delete().eq("id", userId);
-  if (error) throw error;
+  // 1. Get current session to authorize the request
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session) throw new Error("No active session");
+
+  // 2. Call the Python Backend
+  const response = await fetch(`http://127.0.0.1:8000/admin/users/${userId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.detail || "Failed to delete user");
+  }
 }
 
 // ==========================================

@@ -1,13 +1,12 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react"; // <--- Added useEffect
-import { useSearchParams } from "next/navigation"; // <--- Added useSearchParams
+import { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { Video, PlusCircle, MapPin, Filter, Layers } from "lucide-react";
+import { Video, PlusCircle, MapPin, Filter } from "lucide-react";
 
 import { useRegions, useMediaLibrary, useProfile } from "@/hooks/useTroupeData";
-
 import MediaCard from "@/components/MediaCard";
 import PracticeStudio from "@/components/PracticeStudio";
 import UploadModal from "@/components/UploadModal";
@@ -24,7 +23,7 @@ type MediaItemWithTags = Database["public"]["Tables"]["media_items"]["Row"] & {
 
 export default function VideoPage() {
   const queryClient = useQueryClient();
-  const searchParams = useSearchParams(); // <--- 1. Get URL Params
+  const searchParams = useSearchParams();
   const playId = searchParams.get("play");
 
   // Filter State
@@ -37,7 +36,6 @@ export default function VideoPage() {
     "video",
     selectedRegion
   );
-
   const { data: profile } = useProfile();
   const isAdmin = profile?.role === "admin" || profile?.role === "teacher";
 
@@ -55,7 +53,7 @@ export default function VideoPage() {
     type: "success" | "error";
   } | null>(null);
 
-  // --- NEW: DEEP LINKING LOGIC ---
+  // --- DEEP LINKING LOGIC ---
   useEffect(() => {
     if (playId && mediaItems.length > 0) {
       const targetItem = mediaItems.find((item) => item.id === playId);

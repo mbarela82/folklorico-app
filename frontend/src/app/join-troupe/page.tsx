@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import {
-  Layers,
+  //Layers,
   Loader2,
   UserPlus,
   ArrowRight,
@@ -13,6 +13,7 @@ import {
   Lock,
 } from "lucide-react";
 import Toast from "@/components/Toast";
+import BrandLogo from "@/components/BrandLogo";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -62,8 +63,9 @@ export default function RegisterPage() {
       <div className="w-full max-w-sm">
         {/* Brand */}
         <div className="flex justify-center mb-8">
-          <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-2xl shadow-indigo-500/30">
-            <Layers size={32} className="text-white" />
+          <div>
+            {/* <Layers size={32} className="text-white" /> */}
+            <BrandLogo size={50} />
           </div>
         </div>
 

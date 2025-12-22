@@ -9,11 +9,12 @@ import {
   Video,
   ListMusic,
   User,
-  Layers,
+  //Layers,
   Shield,
 } from "lucide-react";
 import { useProfile } from "@/hooks/useTroupeData";
 import NotificationBell from "@/components/NotificationBell";
+import BrandLogo from "@/components/BrandLogo";
 
 // Made prop optional (?) to prevent TypeScript errors in layout.tsx
 interface SidebarProps {
@@ -51,8 +52,9 @@ export default function Sidebar({ onUpload }: SidebarProps) {
     <aside className="hidden md:flex flex-col w-64 bg-zinc-950 border-r border-zinc-800 h-screen sticky top-0 shrink-0 z-50">
       <div className="p-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/30">
-            <Layers size={18} className="text-white" />
+          <div>
+            {/* <Layers size={18} className="text-white" /> */}
+            <BrandLogo size={35} />
           </div>
           <Link href="/dashboard">
             <h1 className="text-xl font-bold tracking-tight text-white">

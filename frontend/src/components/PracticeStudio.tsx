@@ -745,7 +745,7 @@ export default function PracticeStudio({
       {/* BODY */}
       {usePortraitMobileLayout ? (
         <div
-          className="flex-1 md:hidden flex flex-col overflow-y-auto bg-black"
+          className="flex-1 md:hidden flex flex-col overflow-hidden bg-black"
           style={{ paddingBottom: mobileBottomInset }}
         >
           {/* Video */}

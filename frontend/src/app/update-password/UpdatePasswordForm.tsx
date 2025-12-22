@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { Layers, Loader2, Save } from "lucide-react";
+import { Loader2, Save } from "lucide-react";
 import Toast from "@/components/Toast";
+import BrandLogo from "@/components/BrandLogo";
 
 export default function UpdatePasswordClient() {
   const router = useRouter();
@@ -53,8 +54,9 @@ export default function UpdatePasswordClient() {
 
       <div className="w-full max-w-sm">
         <div className="flex justify-center mb-8">
-          <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/30">
-            <Layers size={28} className="text-white" />
+          <div>
+            {/* <Layers size={28} className="text-white" /> */}
+            <BrandLogo size={50} />
           </div>
         </div>
 

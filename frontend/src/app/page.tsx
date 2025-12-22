@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { Layers } from "lucide-react";
+//import { Layers } from "lucide-react";
+import BrandLogo from "@/components/BrandLogo";
 
 export default function RootPage() {
   const router = useRouter();
@@ -36,8 +37,9 @@ export default function RootPage() {
       {/* 1. CENTER CONTENT (Logo + Brand) */}
       <div className="flex-1 flex flex-col items-center justify-center gap-6 w-full max-w-sm animate-in zoom-in-95 duration-700 fade-in">
         {/* Icon Box */}
-        <div className="w-24 h-24 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-3xl flex items-center justify-center shadow-2xl shadow-indigo-500/20 mb-2">
-          <Layers size={48} className="text-white fill-white/20" />
+        <div>
+          {/* <Layers size={48} className="text-white fill-white/20" /> */}
+          <BrandLogo size={65} />
         </div>
 
         {/* Brand Name */}

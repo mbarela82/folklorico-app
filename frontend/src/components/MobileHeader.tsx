@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation"; // <--- Import this
-import { Layers } from "lucide-react";
+//import { Layers } from "lucide-react";
 import NotificationBell from "./NotificationBell";
 import { useProfile } from "@/hooks/useTroupeData";
+import BrandLogo from "@/components/BrandLogo";
 
 export default function MobileHeader() {
   const pathname = usePathname();
@@ -18,8 +19,9 @@ export default function MobileHeader() {
   return (
     <header className="md:hidden sticky top-0 z-50 w-full bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800 px-4 py-3 flex items-center justify-between">
       <Link href="/dashboard" className="flex items-center gap-2">
-        <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/30">
-          <Layers size={18} className="text-white" />
+        <div>
+          {/* <Layers size={18} className="text-white" /> */}
+          <BrandLogo size={30} />
         </div>
         <span className="font-bold text-xl text-white tracking-tight">
           Sarape
