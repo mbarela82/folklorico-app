@@ -3,10 +3,17 @@
 import { useState, useMemo, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { Video, PlusCircle, MapPin, Filter } from "lucide-react";
+import {
+  Video,
+  PlusCircle,
+  MapPin,
+  Filter,
+  Folder,
+  ChevronLeft,
+} from "lucide-react";
 
 // --- IMPORTS ---
-import { supabase } from "@/lib/supabaseClient"; // Clean, top-level import
+import { supabase } from "@/lib/supabaseClient";
 import API_URL from "@/lib/api";
 import { useRegions, useMediaLibrary, useProfile } from "@/hooks/useTroupeData";
 import MediaCard from "@/components/MediaCard";
@@ -30,14 +37,20 @@ function VideoContent() {
 
   const [selectedRegion, setSelectedRegion] = useState<string>("All");
   const [filterTag, setFilterTag] = useState<string | null>(null);
+
+  // Hooks
   const { data: regions = [] } = useRegions("video");
+
+  // We fetch everything when "All" is selected so we can calculate folder counts
   const { data: mediaItems = [], isLoading } = useMediaLibrary(
     "video",
     selectedRegion
   );
+
   const { data: profile } = useProfile();
   const isAdmin = profile?.role === "admin" || profile?.role === "teacher";
 
+  // Local State
   const [currentMedia, setCurrentMedia] = useState<MediaItemWithTags | null>(
     null
   );
@@ -50,6 +63,9 @@ function VideoContent() {
     msg: string;
     type: "success" | "error";
   } | null>(null);
+
+  // --- Derived State for View Mode ---
+  const isFolderView = selectedRegion === "All";
 
   useEffect(() => {
     if (playId && mediaItems.length > 0) {
@@ -68,16 +84,20 @@ function VideoContent() {
     return item.tags && item.tags.includes(filterTag);
   });
 
+  // Calculate counts for folders when in "All" view
+  const getRegionCount = (regionName: string) => {
+    if (!isFolderView) return 0;
+    return mediaItems.filter((item) => item.region === regionName).length;
+  };
+
   const refreshData = () => {
     queryClient.invalidateQueries({ queryKey: ["media", "video"] });
     queryClient.invalidateQueries({ queryKey: ["regions", "video"] });
   };
 
-  // --- FIXED DELETE FUNCTION ---
   const handleDelete = async () => {
     if (!deleteId) return;
     try {
-      // 1. Get Session Token Cleanly
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -88,12 +108,9 @@ function VideoContent() {
         return;
       }
 
-      // 2. Call Backend with Token
       const response = await fetch(`${API_URL}/media/${deleteId}`, {
         method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       if (!response.ok) {
@@ -165,19 +182,36 @@ function VideoContent() {
         confirmText="Yes, Delete"
       />
 
-      {/* Header and Grid */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-4">
+      {/* Header and Controls */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-6">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Video className="text-indigo-400" /> Video Library
-          </h1>
-          <p className="text-zinc-400">Choreography and rehearsal footage.</p>
+          {/* Breadcrumb / Title Logic */}
+          <div className="flex items-center gap-2 mb-1">
+            {!isFolderView && (
+              <button
+                onClick={() => setSelectedRegion("All")}
+                className="text-zinc-400 hover:text-white transition-colors"
+              >
+                <ChevronLeft size={24} />
+              </button>
+            )}
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <Video className="text-indigo-400" />
+              {isFolderView ? "Video Library" : selectedRegion}
+            </h1>
+          </div>
+          <p className="text-zinc-400 pl-1">
+            {isFolderView
+              ? "Select a region folder to view videos."
+              : "Choreography and rehearsal footage."}
+          </p>
         </div>
 
         <div className="flex flex-row gap-3 w-full md:w-auto items-center">
+          {/* Region Dropdown - Acts as Quick Jump */}
           <div className="relative flex-1 sm:w-64">
             <div className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none">
-              <MapPin size={16} />
+              {isFolderView ? <Folder size={16} /> : <MapPin size={16} />}
             </div>
             <select
               value={selectedRegion}
@@ -195,6 +229,7 @@ function VideoContent() {
               <Filter size={12} />
             </div>
           </div>
+
           {isAdmin && (
             <button
               onClick={() => setIsUploadOpen(true)}
@@ -207,37 +242,86 @@ function VideoContent() {
         </div>
       </div>
 
-      <div className="mb-6">
-        <TagFilterBar
-          availableTags={availableTags}
-          selectedTag={filterTag}
-          onSelectTag={setFilterTag}
-        />
-      </div>
-
+      {/* Main Content Area */}
       {isLoading ? (
         <div className="text-zinc-500 animate-pulse">Loading library...</div>
-      ) : filteredItems.length === 0 ? (
-        <div className="h-64 border border-dashed border-zinc-800 rounded-2xl flex flex-col items-center justify-center text-zinc-500 gap-4">
-          <Video size={48} className="opacity-20" />
-          <p>No videos found.</p>
-        </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredItems.map((item) => (
-            <MediaCard
-              key={item.id}
-              title={item.title}
-              region={item.region || ""}
-              type="video"
-              thumbnailUrl={item.thumbnail_url}
-              tags={item.tags}
-              onClick={() => setCurrentMedia(item)}
-              onEdit={isAdmin ? () => setEditingItem(item) : undefined}
-              onDelete={isAdmin ? () => setDeleteId(item.id) : undefined}
-            />
-          ))}
-        </div>
+        <>
+          {/* FOLDER VIEW: Show Grid of Regions */}
+          {isFolderView ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {regions.map((region) => {
+                const count = getRegionCount(region);
+                return (
+                  <div
+                    key={region}
+                    onClick={() => setSelectedRegion(region)}
+                    className="group relative bg-zinc-900/50 border border-zinc-800 p-6 rounded-2xl flex flex-col items-start gap-4 cursor-pointer hover:bg-zinc-800 hover:border-indigo-500/30 transition-all hover:shadow-lg hover:shadow-indigo-500/5"
+                  >
+                    <div className="p-3 bg-zinc-950 rounded-xl text-indigo-500 group-hover:scale-110 group-hover:bg-indigo-500/10 transition-all">
+                      <Folder
+                        size={28}
+                        fill="currentColor"
+                        className="opacity-20 absolute"
+                      />
+                      <Folder size={28} />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-lg text-zinc-100 group-hover:text-white">
+                        {region}
+                      </h3>
+                      <p className="text-sm text-zinc-500">
+                        {count} {count === 1 ? "video" : "videos"}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {regions.length === 0 && (
+                <div className="col-span-full h-40 flex items-center justify-center text-zinc-500 border border-dashed border-zinc-800 rounded-xl">
+                  No regions found.
+                </div>
+              )}
+            </div>
+          ) : (
+            /* FILE VIEW: Show Filter Bar & Media Cards */
+            <>
+              <div className="mb-6">
+                <TagFilterBar
+                  availableTags={availableTags}
+                  selectedTag={filterTag}
+                  onSelectTag={setFilterTag}
+                />
+              </div>
+
+              {filteredItems.length === 0 ? (
+                <div className="h-64 border border-dashed border-zinc-800 rounded-2xl flex flex-col items-center justify-center text-zinc-500 gap-4">
+                  <Video size={48} className="opacity-20" />
+                  <p>No videos found in {selectedRegion}.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredItems.map((item) => (
+                    <MediaCard
+                      key={item.id}
+                      title={item.title}
+                      region={item.region || ""}
+                      type="video"
+                      thumbnailUrl={item.thumbnail_url}
+                      tags={item.tags}
+                      onClick={() => setCurrentMedia(item)}
+                      onEdit={isAdmin ? () => setEditingItem(item) : undefined}
+                      onDelete={
+                        isAdmin ? () => setDeleteId(item.id) : undefined
+                      }
+                    />
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </>
       )}
     </div>
   );
