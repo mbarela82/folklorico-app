@@ -456,10 +456,7 @@ export default function PracticeStudio({
     media?.media_type === "video" && isMobile && isVerticalVideo;
 
   const MobileVerticalControls = () => (
-    <div
-      className="p-4 border-t border-zinc-800 bg-zinc-950"
-      style={{ paddingBottom: mobileBottomInset }}
-    >
+    <div className="p-4 border-t border-zinc-800 bg-zinc-950">
       <div className="mb-3 flex items-center justify-between">
         <div className="text-xs text-zinc-500 font-mono">
           {formatTime(currentTime)} / {formatTime(duration)}
