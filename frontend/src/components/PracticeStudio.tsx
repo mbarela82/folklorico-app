@@ -225,7 +225,7 @@ export default function PracticeStudio({
       );
       const rawInset = Math.round(bottomObscured);
       const finalInset = rawInset > 0 ? rawInset : 12;
-      setMobileBottomInset(Math.max(minInset, Math.round(bottomObscured)));
+      setMobileBottomInset(finalInset);
     };
 
     setInset();
