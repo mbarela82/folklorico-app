@@ -96,7 +96,6 @@ export default function PracticeStudio({
   const hasLoggedPlay = useRef(false);
 
   // --- HELPER: FORCE HTTPS ---
-  // This is the Magic Fix. It ensures even "broken" URLs in the DB play correctly.
   const getValidUrl = (path: string | null) => {
     if (!path) return "";
     if (path.startsWith("http://") || path.startsWith("https://")) {
@@ -166,7 +165,6 @@ export default function PracticeStudio({
         barWidth: 2,
         barGap: 3,
         height: 150,
-        // FIX: Use the valid URL helper
         url: getValidUrl(media.file_path),
         normalize: true,
       });
@@ -456,7 +454,7 @@ export default function PracticeStudio({
     media?.media_type === "video" && isMobile && isVerticalVideo;
 
   const MobileVerticalControls = () => (
-    <div className="px-4 pt-4 pb-[calc(env(safe-area-inset-bottom)+8px)] border-t border-zinc-800 bg-zinc-950">
+    <div className="px-4 pt-4 pb-[calc(env(safe-area-inset-bottom)+80px)] border-t border-zinc-800 bg-zinc-950">
       <div className="mb-3 flex items-center justify-between">
         <div className="text-xs text-zinc-500 font-mono">
           {formatTime(currentTime)} / {formatTime(duration)}
@@ -719,7 +717,6 @@ export default function PracticeStudio({
           <div className="relative bg-black flex-1 flex items-center justify-center px-2 pt-2">
             <video
               ref={videoRef}
-              // FIX: Use the valid URL helper
               src={getValidUrl(media.file_path)}
               playsInline
               className="w-full max-h-[52vh] object-contain transition-transform duration-300"
@@ -770,7 +767,6 @@ export default function PracticeStudio({
               <>
                 <video
                   ref={videoRef}
-                  // FIX: Use the valid URL helper
                   src={getValidUrl(media.file_path)}
                   playsInline
                   className="w-auto h-auto max-h-[60vh] md:w-full md:h-full object-contain transition-transform duration-300"
