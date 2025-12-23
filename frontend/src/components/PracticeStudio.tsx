@@ -223,7 +223,7 @@ export default function PracticeStudio({
         0,
         window.innerHeight - (height + offsetTop)
       );
-      const minInset = 96;
+      const minInset = 34;
       setMobileBottomInset(Math.max(minInset, Math.round(bottomObscured)));
     };
 
@@ -457,7 +457,7 @@ export default function PracticeStudio({
   const MobileVerticalControls = () => (
     <div
       className="p-4 border-t border-zinc-800 bg-zinc-950"
-      style={{ paddingBottom: mobileBottomInset + 16 }}
+      style={{ paddingBottom: mobileBottomInset }}
     >
       <div className="mb-3 flex items-center justify-between">
         <div className="text-xs text-zinc-500 font-mono">

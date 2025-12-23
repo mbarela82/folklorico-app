@@ -22,7 +22,8 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
-  userScalable: false, // This makes it feel like a real app (prevents pinch-zoom)
+  userScalable: false,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
