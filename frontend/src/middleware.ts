@@ -6,10 +6,11 @@ export async function middleware(request: NextRequest) {
   const path = url.pathname;
 
   // --- EMERGENCY EXIT (PWA FIX) ---
-  // Explicitly allow PWA files to pass through immediately.
-  // This prevents the "MIME type" error even if the matcher fails or caches weirdly.
+  // We added "swe-worker-" because your logs show the file is named
+  // "swe-worker-5c72df51bb1f6ee0.js"
   if (
     path.startsWith("/sw.js") ||
+    path.startsWith("/swe-worker-") ||
     path.startsWith("/workbox-") ||
     path.startsWith("/manifest.webmanifest")
   ) {
@@ -55,33 +56,29 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   // 4. Define Route Rules
-  // Pages that ANYONE can see (Logged in or not)
   const publicPaths = ["/login", "/join-troupe", "/update-password", "/"];
-
-  // Is this page public?
   const isPublic = publicPaths.includes(path);
 
   // --- SECURITY LOGIC ---
 
-  // Scenario A: User is NOT logged in, but tries to visit a private page
+  // Scenario A: User is NOT logged in
   if (!user && !isPublic) {
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
-  // Scenario B: User IS logged in, but tries to visit Login or Join page
+  // Scenario B: User IS logged in, but visits Login/Join
   if (user && (path === "/login" || path === "/join-troupe")) {
     url.pathname = "/dashboard";
     return NextResponse.redirect(url);
   }
 
-  // Scenario C: User visits Root "/"
+  // Scenario C: Root "/"
   if (path === "/") {
     if (user) {
       url.pathname = "/dashboard";
       return NextResponse.redirect(url);
     }
-    // If not logged in, just let them see the splash screen (page.tsx)
     return response;
   }
 
@@ -94,10 +91,10 @@ export const config = {
     /*
      * Match all paths except:
      * - _next/static, _next/image, favicon.ico
-     * - PWA files: sw.js, workbox-*, manifest.webmanifest
-     * - Supabase auth callback
-     * - Standard image files
+     * - sw.js, swe-worker-*, workbox-*, manifest.webmanifest (The PWA files)
+     * - auth/callback
+     * - images
      */
-    "/((?!_next/static|_next/image|favicon.ico|sw.js|workbox-|manifest.webmanifest|auth/callback|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|sw.js|swe-worker-|workbox-|manifest.webmanifest|auth/callback|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
