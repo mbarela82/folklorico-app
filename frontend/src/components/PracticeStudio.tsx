@@ -456,7 +456,7 @@ export default function PracticeStudio({
     media?.media_type === "video" && isMobile && isVerticalVideo;
 
   const MobileVerticalControls = () => (
-    <div className="p-4 border-t border-zinc-800 bg-zinc-950">
+    <div className="px-4 pt-4 pb-[calc(env(safe-area-inset-bottom)+8px)] border-t border-zinc-800 bg-zinc-950">
       <div className="mb-3 flex items-center justify-between">
         <div className="text-xs text-zinc-500 font-mono">
           {formatTime(currentTime)} / {formatTime(duration)}
@@ -716,7 +716,7 @@ export default function PracticeStudio({
 
       {usePortraitMobileLayout ? (
         <div className="flex-1 md:hidden flex flex-col overflow-hidden bg-black">
-          <div className="relative bg-black flex items-center justify-center px-2 pt-2">
+          <div className="relative bg-black flex-1 flex items-center justify-center px-2 pt-2">
             <video
               ref={videoRef}
               // FIX: Use the valid URL helper
