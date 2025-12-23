@@ -223,7 +223,8 @@ export default function PracticeStudio({
         0,
         window.innerHeight - (height + offsetTop)
       );
-      const minInset = 34;
+      const rawInset = Math.round(bottomObscured);
+      const finalInset = rawInset > 0 ? rawInset : 12;
       setMobileBottomInset(Math.max(minInset, Math.round(bottomObscured)));
     };
 
