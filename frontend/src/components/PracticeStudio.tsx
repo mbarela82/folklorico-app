@@ -15,14 +15,14 @@ import {
   Maximize,
   FlipHorizontal,
   Gauge,
-  Repeat,
 } from "lucide-react";
 import WaveSurfer from "wavesurfer.js";
 
-// Components
-import BookmarkList from "@/components/BookmarkList";
-
+// Types & Child Components
 import { Database } from "@/types/supabase";
+import MobileControls from "./studio/MobileControls";
+import DrawerContent from "./studio/DrawerContent";
+
 type MediaItem = Database["public"]["Tables"]["media_items"]["Row"];
 type BookmarkItem = Database["public"]["Tables"]["bookmarks"]["Row"];
 
@@ -82,11 +82,9 @@ export default function PracticeStudio({
     null
   );
 
-  // --- Portrait-video mobile-only UI state (scoped) ---
+  // --- Portrait-video mobile-only UI state ---
   const [isVerticalVideo, setIsVerticalVideo] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [mobileBottomInset, setMobileBottomInset] = useState(88);
-
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const drawerTopRef = useRef<HTMLDivElement>(null);
   const addMarkRef = useRef<HTMLDivElement>(null);
@@ -143,7 +141,7 @@ export default function PracticeStudio({
     setBookmarks([]);
     fetchBookmarks();
 
-    // Reset portrait-mobile UI (scoped, does not affect fullscreen)
+    // Reset mobile UI
     setIsVerticalVideo(false);
     setIsDrawerOpen(false);
     setIsAddingMark(false);
@@ -156,7 +154,6 @@ export default function PracticeStudio({
         wavesurfer.current.destroy();
         wavesurfer.current = null;
       }
-
       wavesurfer.current = WaveSurfer.create({
         container: containerRef.current,
         waveColor: "#4f46e5",
@@ -172,7 +169,7 @@ export default function PracticeStudio({
       wavesurfer.current.on("play", () => setIsPlaying(true));
       wavesurfer.current.on("pause", () => setIsPlaying(false));
 
-      // AUDIO LOOP CHECK (Reads from Ref)
+      // AUDIO LOOP CHECK
       wavesurfer.current.on("timeupdate", (time) => {
         setCurrentTime(time);
         const { a, b, active } = loopRef.current;
@@ -208,36 +205,6 @@ export default function PracticeStudio({
     };
   }, []);
 
-  // Compute bottom inset ONLY for portrait-video mobile layout
-  useEffect(() => {
-    if (!media || media.media_type !== "video" || !isMobile || !isVerticalVideo)
-      return;
-
-    const setInset = () => {
-      const vv = window.visualViewport;
-      const height = vv?.height ?? window.innerHeight;
-      const offsetTop = vv?.offsetTop ?? 0;
-      const bottomObscured = Math.max(
-        0,
-        window.innerHeight - (height + offsetTop)
-      );
-      const rawInset = Math.round(bottomObscured);
-      const finalInset = rawInset > 0 ? rawInset : 12;
-      setMobileBottomInset(finalInset);
-    };
-
-    setInset();
-    window.addEventListener("resize", setInset);
-    window.visualViewport?.addEventListener("resize", setInset);
-    window.visualViewport?.addEventListener("scroll", setInset);
-
-    return () => {
-      window.removeEventListener("resize", setInset);
-      window.visualViewport?.removeEventListener("resize", setInset);
-      window.visualViewport?.removeEventListener("scroll", setInset);
-    };
-  }, [media, isMobile, isVerticalVideo]);
-
   // Scroll drawer to add form
   useEffect(() => {
     if (!isDrawerOpen) return;
@@ -257,7 +224,7 @@ export default function PracticeStudio({
     return () => window.clearTimeout(t);
   }, [isDrawerOpen, isAddingMark]);
 
-  // Listeners
+  // Volume & Speed Listeners
   useEffect(() => {
     const targetVolume = isMuted ? 0 : volume;
     if (wavesurfer.current) wavesurfer.current.setVolume(targetVolume);
@@ -270,7 +237,6 @@ export default function PracticeStudio({
   }, [playbackRate]);
 
   // --- ACTIONS ---
-
   const fetchBookmarks = async () => {
     if (!media) return;
     const { data } = await supabase
@@ -278,7 +244,6 @@ export default function PracticeStudio({
       .select("*")
       .eq("media_id", media.id)
       .order("start_time", { ascending: true });
-
     if (data) setBookmarks(data);
   };
 
@@ -319,11 +284,9 @@ export default function PracticeStudio({
     const start = mark.start_time;
     const end = mark.start_time + loopDuration;
     loopRef.current = { a: start, b: end, active: true };
-
     setLoopA(start);
     setLoopB(end);
     setActiveLoopId(mark.id);
-
     jumpTo(start);
     setIsPlaying(true);
   };
@@ -340,13 +303,11 @@ export default function PracticeStudio({
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const time = parseFloat(e.target.value);
     const { a, b, active } = loopRef.current;
-
     if (active && a !== null && b !== null) {
       if (time < a - 1 || time > b + 1) {
         clearLoop();
       }
     }
-
     setCurrentTime(time);
     if (media?.media_type === "video" && videoRef.current) {
       videoRef.current.currentTime = time;
@@ -360,7 +321,6 @@ export default function PracticeStudio({
     if (active && a !== null && Math.abs(time - a) > 0.5) {
       clearLoop();
     }
-
     if (media?.media_type === "audio") {
       wavesurfer.current?.setTime(time);
       wavesurfer.current?.play();
@@ -396,7 +356,6 @@ export default function PracticeStudio({
 
   const handleSaveBookmark = async () => {
     if (!media) return;
-
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -404,7 +363,6 @@ export default function PracticeStudio({
       alert("You must be logged in to save notes.");
       return;
     }
-
     const { error } = await supabase.from("bookmarks").insert({
       media_id: media.id,
       user_id: user.id,
@@ -412,7 +370,6 @@ export default function PracticeStudio({
       note: newMarkNote || `Mark at ${formatTime(currentTime)}`,
       is_public: isNewMarkPublic,
     });
-
     if (error) {
       console.error("Save Error:", error);
       alert(`Error saving note: ${error.message}`);
@@ -450,251 +407,15 @@ export default function PracticeStudio({
     jumpTo(target);
   };
 
+  // Determine Layout Mode
   const usePortraitMobileLayout =
     media?.media_type === "video" && isMobile && isVerticalVideo;
-
-  const MobileVerticalControls = () => (
-    <div className="px-4 pt-4 pb-[calc(env(safe-area-inset-bottom)+80px)] border-t border-zinc-800 bg-zinc-950">
-      <div className="mb-3 flex items-center justify-between">
-        <div className="text-xs text-zinc-500 font-mono">
-          {formatTime(currentTime)} / {formatTime(duration)}
-        </div>
-        <button
-          onClick={cycleSpeed}
-          className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-zinc-300"
-        >
-          <Gauge size={14} />
-          <span>{playbackRate}x</span>
-        </button>
-      </div>
-
-      <div className="mb-4 relative h-2 group/scrubber">
-        <div className="absolute inset-0 bg-zinc-700 rounded-lg z-0" />
-        {activeLoopId && loopA !== null && (
-          <div
-            className="absolute top-0 bottom-0 bg-indigo-500/30 pointer-events-none z-0"
-            style={{
-              left: `${duration ? (loopA / duration) * 100 : 0}%`,
-              width: loopB
-                ? `${duration ? ((loopB - loopA) / duration) * 100 : 0}%`
-                : "2px",
-            }}
-          />
-        )}
-        <div className="absolute top-0 w-full h-full z-10 pointer-events-none">
-          {bookmarks.map((b) => (
-            <div
-              key={b.id}
-              className={`absolute top-0 h-full w-1 rounded-full ${
-                b.is_public ? "bg-amber-400 z-20" : "bg-white z-10"
-              }`}
-              style={{
-                left: `${duration ? (b.start_time / duration) * 100 : 0}%`,
-              }}
-            />
-          ))}
-        </div>
-        <input
-          type="range"
-          min="0"
-          max={duration}
-          value={currentTime}
-          onChange={handleSeek}
-          className="absolute inset-0 w-full h-full appearance-none bg-transparent cursor-pointer z-20 focus:outline-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-lg"
-        />
-      </div>
-
-      <div className="flex items-center justify-between max-w-md mx-auto gap-2">
-        <button
-          onClick={() => {
-            setIsDrawerOpen(true);
-            setIsAddingMark(true);
-          }}
-          className={`flex flex-col items-center gap-1 transition-colors ${
-            isAddingMark ? "text-indigo-400" : "text-zinc-500 hover:text-white"
-          }`}
-        >
-          <Bookmark size={20} fill={isAddingMark ? "currentColor" : "none"} />
-          <span className="text-[10px]">Mark</span>
-        </button>
-        <button
-          onClick={() => skip(-5)}
-          className="text-zinc-400 hover:text-white"
-        >
-          <SkipBack size={24} />
-        </button>
-        <button
-          onClick={togglePlay}
-          className="w-12 h-12 bg-indigo-600 hover:bg-indigo-500 rounded-full flex items-center justify-center text-white shadow-lg hover:scale-105 transition-all"
-        >
-          {isPlaying ? (
-            <Pause size={24} fill="currentColor" />
-          ) : (
-            <Play size={24} fill="currentColor" className="ml-1" />
-          )}
-        </button>
-        <button
-          onClick={() => skip(5)}
-          className="text-zinc-400 hover:text-white"
-        >
-          <SkipForward size={24} />
-        </button>
-        <button
-          onClick={() => setIsMuted(!isMuted)}
-          className={`transition-colors ${
-            isMuted ? "text-zinc-500" : "text-white"
-          }`}
-        >
-          {isMuted || volume === 0 ? (
-            <VolumeX size={20} />
-          ) : (
-            <Volume2 size={20} />
-          )}
-        </button>
-      </div>
-    </div>
-  );
-
-  const DrawerBookmarkContent = () => (
-    <>
-      {isAddingMark && (
-        <div
-          ref={addMarkRef}
-          className="mb-4 bg-black/40 p-3 rounded-lg border border-indigo-500/40 animate-in fade-in slide-in-from-top-2"
-        >
-          <input
-            autoFocus
-            type="text"
-            placeholder="Note..."
-            value={newMarkNote}
-            onChange={(e) => setNewMarkNote(e.target.value)}
-            className="w-full bg-black/40 border border-white/10 rounded p-2 text-sm text-white mb-2 focus:border-indigo-500 outline-none"
-          />
-          {(userRole === "teacher" || userRole === "admin") && (
-            <div
-              onClick={() => setIsNewMarkPublic(!isNewMarkPublic)}
-              className="flex items-center gap-2 mb-3 cursor-pointer text-xs font-bold text-zinc-300 hover:text-white"
-            >
-              <div
-                className={`w-4 h-4 border rounded flex items-center justify-center ${
-                  isNewMarkPublic
-                    ? "bg-amber-500 border-amber-500"
-                    : "border-white/30"
-                }`}
-              >
-                {isNewMarkPublic && (
-                  <div className="w-2 h-2 bg-black rounded-sm" />
-                )}
-              </div>
-              <span>Make Public (Teacher Note)</span>
-            </div>
-          )}
-          <div className="flex gap-2">
-            <button
-              onClick={handleSaveBookmark}
-              className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs py-2 rounded font-medium"
-            >
-              Save
-            </button>
-            <button
-              onClick={() => setIsAddingMark(false)}
-              className="px-3 bg-white/10 text-zinc-200 hover:text-white text-xs py-2 rounded"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-      {activeLoopId && (
-        <div className="mb-3 px-3 py-3 bg-indigo-900/20 border border-indigo-500/30 rounded-lg flex flex-col gap-3 animate-in fade-in">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-indigo-200 text-xs font-bold uppercase tracking-wider">
-              <Repeat size={14} className="animate-spin-slow" /> Looping Section
-            </div>
-            <button
-              onClick={clearLoop}
-              className="text-zinc-200 hover:text-white bg-white/10 p-1 rounded-full"
-            >
-              <X size={14} />
-            </button>
-          </div>
-          <div className="flex gap-2">
-            {[5, 10, 15, 20].map((sec) => (
-              <button
-                key={sec}
-                onClick={() => updateLoopDuration(sec)}
-                className={`flex-1 py-1.5 text-[10px] font-bold rounded border transition-colors ${
-                  loopDuration === sec
-                    ? "bg-indigo-600 border-indigo-500 text-white shadow-sm"
-                    : "bg-white/5 border-white/10 text-zinc-200 hover:text-white hover:bg-white/10"
-                }`}
-              >
-                {sec}s
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-      <BookmarkList
-        bookmarks={bookmarks}
-        currentUserId={currentUserId}
-        activeLoopId={activeLoopId}
-        selectedId={selectedBookmarkId}
-        onJump={(time, id) => {
-          setSelectedBookmarkId(id);
-          jumpTo(time);
-          setIsDrawerOpen(false);
-        }}
-        onLoop={(mark) => {
-          setSelectedBookmarkId(mark.id);
-          toggleBookmarkLoop(mark);
-        }}
-        onDelete={(id) => handleDeleteBookmark(id)}
-        formatTime={formatTime}
-      />
-    </>
-  );
-
-  const MobileSideDrawer = () => (
-    <div
-      className={`fixed inset-0 z-[60] ${
-        isDrawerOpen ? "" : "pointer-events-none"
-      }`}
-    >
-      <div
-        className={`absolute inset-0 bg-black/35 transition-opacity ${
-          isDrawerOpen ? "opacity-100" : "opacity-0"
-        }`}
-        onClick={() => setIsDrawerOpen(false)}
-      />
-      <div
-        className={`absolute top-0 right-0 h-full w-[85%] max-w-sm bg-black/55 backdrop-blur-md border-l border-white/10 transition-transform ${
-          isDrawerOpen ? "translate-x-0" : "translate-x-full"
-        }`}
-      >
-        <div className="flex items-center justify-between p-4 border-b border-white/10 bg-black/40 backdrop-blur-md">
-          <div className="text-xs font-bold uppercase tracking-wider text-zinc-200">
-            Bookmarks
-          </div>
-          <button
-            onClick={() => setIsDrawerOpen(false)}
-            className="p-2 hover:bg-white/10 rounded-full text-zinc-200"
-          >
-            <X size={20} />
-          </button>
-        </div>
-        <div className="p-4 overflow-y-auto h-[calc(100%-64px)]">
-          <div ref={drawerTopRef} />
-          <DrawerBookmarkContent />
-        </div>
-      </div>
-    </div>
-  );
 
   if (!media) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-zinc-950 flex flex-col animate-in slide-in-from-bottom duration-300">
+      {/* HEADER */}
       <div className="flex items-center justify-between p-4 border-b border-zinc-900 shrink-0 bg-zinc-950 relative z-50">
         <div className="text-center flex-1 px-4 overflow-hidden">
           <h2 className="font-bold text-white text-lg truncate">
@@ -713,6 +434,7 @@ export default function PracticeStudio({
       </div>
 
       {usePortraitMobileLayout ? (
+        // === MOBILE PORTRAIT LAYOUT ===
         <div className="flex-1 md:hidden flex flex-col overflow-hidden bg-black">
           <div className="relative bg-black flex-1 flex items-center justify-center px-2 pt-2">
             <video
@@ -755,13 +477,93 @@ export default function PracticeStudio({
               </button>
             </div>
           </div>
+
           <div className="shrink-0">
-            <MobileVerticalControls />
+            <MobileControls
+              currentTime={currentTime}
+              duration={duration}
+              playbackRate={playbackRate}
+              isPlaying={isPlaying}
+              isAddingMark={isAddingMark}
+              activeLoopId={activeLoopId}
+              loopA={loopA}
+              loopB={loopB}
+              bookmarks={bookmarks}
+              volume={volume}
+              isMuted={isMuted}
+              onSeek={handleSeek}
+              onTogglePlay={togglePlay}
+              onCycleSpeed={cycleSpeed}
+              onSkip={skip}
+              onToggleMute={() => setIsMuted(!isMuted)}
+              onToggleAddMark={() => setIsAddingMark(!isAddingMark)}
+              onOpenDrawer={() => setIsDrawerOpen(true)}
+              formatTime={formatTime}
+            />
           </div>
-          <MobileSideDrawer />
+
+          {/* DRAWER */}
+          <div
+            className={`fixed inset-0 z-[60] ${
+              isDrawerOpen ? "" : "pointer-events-none"
+            }`}
+          >
+            <div
+              className={`absolute inset-0 bg-black/35 transition-opacity ${
+                isDrawerOpen ? "opacity-100" : "opacity-0"
+              }`}
+              onClick={() => setIsDrawerOpen(false)}
+            />
+            <div
+              className={`absolute top-0 right-0 h-full w-[85%] max-w-sm bg-black/55 backdrop-blur-md border-l border-white/10 transition-transform ${
+                isDrawerOpen ? "translate-x-0" : "translate-x-full"
+              }`}
+            >
+              <div className="flex items-center justify-between p-4 border-b border-white/10 bg-black/40 backdrop-blur-md">
+                <div className="text-xs font-bold uppercase tracking-wider text-zinc-200">
+                  Bookmarks
+                </div>
+                <button
+                  onClick={() => setIsDrawerOpen(false)}
+                  className="p-2 hover:bg-white/10 rounded-full text-zinc-200"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="p-4 overflow-y-auto h-[calc(100%-64px)]">
+                <div ref={drawerTopRef} />
+                <DrawerContent
+                  isAddingMark={isAddingMark}
+                  setIsAddingMark={setIsAddingMark}
+                  newMarkNote={newMarkNote}
+                  setNewMarkNote={setNewMarkNote}
+                  isNewMarkPublic={isNewMarkPublic}
+                  setIsNewMarkPublic={setIsNewMarkPublic}
+                  userRole={userRole}
+                  activeLoopId={activeLoopId}
+                  loopDuration={loopDuration}
+                  clearLoop={clearLoop}
+                  updateLoopDuration={updateLoopDuration}
+                  bookmarks={bookmarks}
+                  currentUserId={currentUserId}
+                  selectedBookmarkId={selectedBookmarkId}
+                  setSelectedBookmarkId={setSelectedBookmarkId}
+                  jumpTo={jumpTo}
+                  toggleBookmarkLoop={toggleBookmarkLoop}
+                  handleDeleteBookmark={handleDeleteBookmark}
+                  handleSaveBookmark={handleSaveBookmark}
+                  formatTime={formatTime}
+                  closeDrawer={() => setIsDrawerOpen(false)}
+                  addMarkRef={addMarkRef}
+                />
+              </div>
+            </div>
+          </div>
         </div>
       ) : (
+        // === STANDARD / DESKTOP LAYOUT ===
         <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+          {/* MEDIA AREA */}
           <div className="relative z-0 bg-black flex items-center justify-center shrink-0 h-auto min-h-[30vh] md:h-full md:w-[70%] md:border-r md:border-zinc-800 group min-h-0">
             {media.media_type === "video" && (
               <>
@@ -800,7 +602,6 @@ export default function PracticeStudio({
                 </div>
               </>
             )}
-
             {media.media_type === "audio" && (
               <div className="w-full px-4 md:px-12">
                 <div className="relative w-full">
@@ -821,7 +622,9 @@ export default function PracticeStudio({
             )}
           </div>
 
+          {/* CONTROLS AREA */}
           <div className="flex-1 flex flex-col bg-zinc-900 overflow-hidden md:w-[30%] relative z-10 min-h-0">
+            {/* Playback Controls */}
             <div className="p-4 border-b border-zinc-800 shrink-0 bg-zinc-900 relative z-50 shadow-xl">
               <div className="mb-3 flex items-center justify-between">
                 <div className="text-xs text-zinc-500 font-mono">
@@ -835,6 +638,7 @@ export default function PracticeStudio({
                   <span>{playbackRate}x</span>
                 </button>
               </div>
+
               {media.media_type === "video" && (
                 <div className="mb-4 relative h-2 group/scrubber">
                   <div className="absolute inset-0 bg-zinc-700 rounded-lg z-0" />
@@ -937,99 +741,31 @@ export default function PracticeStudio({
               </div>
             </div>
 
+            {/* SIDEBAR BOOKMARK CONTENT */}
             <div className="flex-1 overflow-y-auto p-4 pb-20 md:pb-4 relative z-0">
-              {isAddingMark && (
-                <div className="mb-4 bg-zinc-950 p-3 rounded-lg border border-indigo-500/50 animate-in fade-in slide-in-from-top-2">
-                  <input
-                    autoFocus
-                    type="text"
-                    placeholder="Note..."
-                    value={newMarkNote}
-                    onChange={(e) => setNewMarkNote(e.target.value)}
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded p-2 text-sm text-white mb-2 focus:border-indigo-500 outline-none"
-                  />
-                  {(userRole === "teacher" || userRole === "admin") && (
-                    <div
-                      onClick={() => setIsNewMarkPublic(!isNewMarkPublic)}
-                      className="flex items-center gap-2 mb-3 cursor-pointer text-xs font-bold text-zinc-400 hover:text-white"
-                    >
-                      <div
-                        className={`w-4 h-4 border rounded flex items-center justify-center ${
-                          isNewMarkPublic
-                            ? "bg-amber-500 border-amber-500"
-                            : "border-zinc-600"
-                        }`}
-                      >
-                        {isNewMarkPublic && (
-                          <div className="w-2 h-2 bg-black rounded-sm" />
-                        )}
-                      </div>
-                      <span>Make Public (Teacher Note)</span>
-                    </div>
-                  )}
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handleSaveBookmark}
-                      className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs py-2 rounded font-medium"
-                    >
-                      Save
-                    </button>
-                    <button
-                      onClick={() => setIsAddingMark(false)}
-                      className="px-3 bg-zinc-800 text-zinc-400 hover:text-white text-xs py-2 rounded"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {activeLoopId && (
-                <div className="mb-3 px-3 py-3 bg-indigo-900/20 border border-indigo-500/30 rounded-lg flex flex-col gap-3 animate-in fade-in">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-indigo-300 text-xs font-bold uppercase tracking-wider">
-                      <Repeat size={14} className="animate-spin-slow" /> Looping
-                      Section
-                    </div>
-                    <button
-                      onClick={clearLoop}
-                      className="text-zinc-400 hover:text-white bg-black/20 p-1 rounded-full"
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-                  <div className="flex gap-2">
-                    {[5, 10, 15, 20].map((sec) => (
-                      <button
-                        key={sec}
-                        onClick={() => updateLoopDuration(sec)}
-                        className={`flex-1 py-1.5 text-[10px] font-bold rounded border transition-colors ${
-                          loopDuration === sec
-                            ? "bg-indigo-600 border-indigo-500 text-white shadow-sm"
-                            : "bg-zinc-900 border-zinc-700 text-zinc-400 hover:text-white hover:bg-zinc-800"
-                        }`}
-                      >
-                        {sec}s
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-              <BookmarkList
+              <DrawerContent
+                isAddingMark={isAddingMark}
+                setIsAddingMark={setIsAddingMark}
+                newMarkNote={newMarkNote}
+                setNewMarkNote={setNewMarkNote}
+                isNewMarkPublic={isNewMarkPublic}
+                setIsNewMarkPublic={setIsNewMarkPublic}
+                userRole={userRole}
+                activeLoopId={activeLoopId}
+                loopDuration={loopDuration}
+                clearLoop={clearLoop}
+                updateLoopDuration={updateLoopDuration}
                 bookmarks={bookmarks}
                 currentUserId={currentUserId}
-                activeLoopId={activeLoopId}
-                selectedId={selectedBookmarkId}
-                onJump={(time, id) => {
-                  setSelectedBookmarkId(id);
-                  jumpTo(time);
-                }}
-                onLoop={(mark) => {
-                  setSelectedBookmarkId(mark.id);
-                  toggleBookmarkLoop(mark);
-                }}
-                onDelete={(id) => handleDeleteBookmark(id)}
+                selectedBookmarkId={selectedBookmarkId}
+                setSelectedBookmarkId={setSelectedBookmarkId}
+                jumpTo={jumpTo}
+                toggleBookmarkLoop={toggleBookmarkLoop}
+                handleDeleteBookmark={handleDeleteBookmark}
+                handleSaveBookmark={handleSaveBookmark}
                 formatTime={formatTime}
+                closeDrawer={() => {}}
+                addMarkRef={addMarkRef}
               />
             </div>
           </div>

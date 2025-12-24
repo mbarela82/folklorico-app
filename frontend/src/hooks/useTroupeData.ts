@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import API_URL from "@/lib/api";
 
@@ -40,29 +40,78 @@ export function useRecentMedia() {
   });
 }
 
-export function useRegions(mediaType: "audio" | "video") {
-  return useQuery({
-    queryKey: ["regions", mediaType],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("media_items")
-        .select("region")
-        .eq("media_type", mediaType)
-        .order("region");
-      if (!data) return [];
+// --- NEW: FOLDER / REGION MANAGEMENT ---
 
-      // Return unique regions
-      return Array.from(
-        new Set(data.map((i) => i.region).filter(Boolean) as string[])
-      );
+export function useFolders() {
+  return useQuery({
+    queryKey: ["regions"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("regions")
+        .select("*")
+        .order("name");
+      if (error) throw error;
+      return data || [];
     },
-    staleTime: 1000 * 60 * 5, // Cache for 5 mins
   });
 }
 
-export function useMediaLibrary(mediaType: "audio" | "video", region: string) {
+export function useCreateFolder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (name: string) => {
+      const { data, error } = await supabase
+        .from("regions")
+        .insert({ name })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["regions"] });
+    },
+  });
+}
+
+export function useUpdateFolder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, name }: { id: number; name: string }) => {
+      const { error } = await supabase
+        .from("regions")
+        .update({ name })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["regions"] });
+      queryClient.invalidateQueries({ queryKey: ["media"] });
+    },
+  });
+}
+
+export function useDeleteFolder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const { error } = await supabase.from("regions").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["regions"] });
+    },
+  });
+}
+
+// --- UPDATED: useMediaLibrary now handles regionId ---
+
+export function useMediaLibrary(
+  mediaType: "audio" | "video",
+  regionId: number | "All"
+) {
   return useQuery({
-    queryKey: ["media", mediaType, region],
+    queryKey: ["media", mediaType, regionId],
     queryFn: async () => {
       let query = supabase
         .from("media_items")
@@ -70,16 +119,36 @@ export function useMediaLibrary(mediaType: "audio" | "video", region: string) {
         .eq("media_type", mediaType)
         .order("title");
 
-      if (region !== "All") query = query.eq("region", region);
+      // Filter by ID if not "All"
+      if (regionId !== "All") {
+        query = query.eq("region_id", regionId);
+      }
 
       const { data, error } = await query;
       if (error) throw error;
 
-      // Flatten tags for easier consumption in UI
       return data.map((item: any) => ({
         ...item,
         tags: item.media_tags.map((mt: any) => mt.tags.name),
       }));
+    },
+  });
+}
+
+// Deprecated but kept for backward compatibility if needed elsewhere
+export function useRegions(mediaType: "audio" | "video") {
+  return useQuery({
+    queryKey: ["regions_legacy", mediaType],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("media_items")
+        .select("region")
+        .eq("media_type", mediaType)
+        .order("region");
+      if (!data) return [];
+      return Array.from(
+        new Set(data.map((i) => i.region).filter(Boolean) as string[])
+      );
     },
   });
 }
@@ -203,23 +272,18 @@ export async function updateRole(userId: string, newRole: string) {
   if (error) throw error;
 }
 
-// --- UPDATED: Uses Backend API for complete deletion ---
 export async function deleteUser(userId: string) {
-  // 1. Get current session to authorize the request
   const {
     data: { session },
   } = await supabase.auth.getSession();
-
   if (!session) throw new Error("No active session");
 
-  // 2. Call the Python Backend
   const response = await fetch(`${API_URL}/admin/users/${userId}`, {
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${session.access_token}`,
     },
   });
-
   if (!response.ok) {
     const errorData = await response.json();
     throw new Error(errorData.detail || "Failed to delete user");

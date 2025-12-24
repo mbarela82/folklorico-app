@@ -2,9 +2,18 @@
 
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import API_URL from "@/lib/api"; // <--- THIS IS THE ONLY NEW IMPORT
-import { X, Upload, AlertCircle, Music, Video, FileVideo } from "lucide-react";
+import API_URL from "@/lib/api";
+import {
+  X,
+  Upload,
+  AlertCircle,
+  Music,
+  Video,
+  FileVideo,
+  Plus,
+} from "lucide-react";
 import TagSelector from "@/components/TagSelector";
+import { useFolders, useCreateFolder } from "@/hooks/useTroupeData";
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -19,21 +28,27 @@ export default function UploadModal({
   onUploadSuccess,
   defaultType = "audio",
 }: UploadModalProps) {
+  // Hooks for Folders
+  const { data: folders = [] } = useFolders();
+  const createFolder = useCreateFolder();
+
   const [activeTab, setActiveTab] = useState<"audio" | "video">(defaultType);
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
-  const [region, setRegion] = useState("");
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
+  // Replaced "region" string state with ID
+  const [regionId, setRegionId] = useState<string>("");
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [statusText, setStatusText] = useState("");
-
   const [message, setMessage] = useState<{
     text: string;
     type: "success" | "error";
   } | null>(null);
-
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -41,7 +56,9 @@ export default function UploadModal({
       setActiveTab(defaultType);
       setFile(null);
       setTitle("");
-      setRegion("");
+      setRegionId("");
+      setIsCreatingFolder(false);
+      setNewFolderName("");
       setSelectedTags([]);
       setMessage(null);
       setIsUploading(false);
@@ -60,9 +77,24 @@ export default function UploadModal({
     }
   };
 
+  const handleCreateFolder = async () => {
+    if (!newFolderName.trim()) return;
+    try {
+      const newFolder = await createFolder.mutateAsync(newFolderName.trim());
+      setIsCreatingFolder(false);
+      setRegionId(newFolder.id.toString());
+      setNewFolderName("");
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const handleUpload = async () => {
-    if (!file || !title || !region) {
-      setMessage({ text: "Please fill in all fields", type: "error" });
+    if (!file || !title || !regionId) {
+      setMessage({
+        text: "Please fill in all fields (including folder)",
+        type: "error",
+      });
       return;
     }
 
@@ -70,9 +102,7 @@ export default function UploadModal({
     setUploadProgress(0);
     setStatusText("Starting upload...");
     setMessage(null);
-
     try {
-      // 1. GET THE SESSION TOKEN
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -86,19 +116,23 @@ export default function UploadModal({
       const formData = new FormData();
       formData.append("file", file);
       formData.append("title", title);
+      formData.append("region_id", regionId); // Pass ID to backend
 
-      // 2. USE XHR INSTEAD OF FETCH (For Progress Tracking)
+      // Pass Name for redundancy (optional, but good for Option 2 legacy support)
+      const folderName =
+        folders.find((f: any) => f.id.toString() === regionId)?.name ||
+        "Unknown";
+      formData.append("region", folderName);
+
+      // XHR Upload
       const result = await new Promise<any>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-
-        // Progress Listener
         xhr.upload.onprogress = (event) => {
           if (event.lengthComputable) {
             const percentComplete = Math.round(
               (event.loaded / event.total) * 100
             );
             setUploadProgress(percentComplete);
-
             if (percentComplete < 100) {
               setStatusText(`Uploading: ${percentComplete}%`);
             } else {
@@ -124,49 +158,25 @@ export default function UploadModal({
             }
           }
         };
-
         xhr.onerror = () => reject(new Error("Network Error"));
-
-        // --- CRITICAL CHANGE HERE ---
-        // Switched from "http://127.0.0.1:8000/..." to `API_URL`
         xhr.open("POST", `${API_URL}/upload/convert`);
-
         xhr.setRequestHeader("Authorization", `Bearer ${token}`);
         xhr.send(formData);
       });
 
-      // 3. HANDLE SUCCESS RESPONSE
-      const finalUrl =
-        typeof result.public_url === "string"
-          ? result.public_url
-          : result.public_url?.data?.publicUrl;
+      // --- FIXED LOGIC STARTS HERE ---
+      // We do NOT insert into supabase here anymore.
+      // The backend did it for us and returned the `data` object.
 
-      const thumbUrl =
-        typeof result.thumbnail_url === "string"
-          ? result.thumbnail_url
-          : result.thumbnail_url?.data?.publicUrl;
+      setStatusText("Saving tags...");
 
-      if (!finalUrl) throw new Error("Failed to retrieve public URL");
+      const mediaData = result.data; // This comes from backend response
 
-      // 4. SAVE TO SUPABASE DB
-      setStatusText("Saving details...");
+      if (!mediaData || !mediaData.id) {
+        throw new Error("Upload succeeded but no data returned from server.");
+      }
 
-      const { data: mediaData, error: dbError } = await supabase
-        .from("media_items")
-        .insert({
-          uploader_id: user.id,
-          title,
-          region,
-          media_type: activeTab,
-          file_path: finalUrl,
-          thumbnail_url: thumbUrl || null,
-        })
-        .select()
-        .single();
-
-      if (dbError || !mediaData) throw dbError;
-
-      // 5. SAVE TAGS
+      // Save Tags (We still do this on frontend for now, using the ID from backend)
       if (selectedTags.length > 0) {
         for (const tagName of selectedTags) {
           let tagId: number | null = null;
@@ -175,7 +185,6 @@ export default function UploadModal({
             .select("id")
             .eq("name", tagName)
             .single();
-
           if (existingTag) {
             tagId = existingTag.id;
           } else {
@@ -317,18 +326,60 @@ export default function UploadModal({
               />
             </div>
 
+            {/* FOLDER SELECTOR */}
             <div>
-              <label className="text-xs font-bold text-zinc-500 uppercase ml-1">
-                Region
+              <label className="text-xs font-bold text-zinc-500 uppercase ml-1 block mb-1">
+                Region / Folder
               </label>
-              <input
-                type="text"
-                disabled={isUploading}
-                placeholder="e.g. Jalisco"
-                value={region}
-                onChange={(e) => setRegion(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white text-sm focus:border-indigo-500 outline-none transition-colors disabled:opacity-50"
-              />
+              {!isCreatingFolder ? (
+                <div className="flex gap-2">
+                  <select
+                    value={regionId}
+                    onChange={(e) => setRegionId(e.target.value)}
+                    className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white text-sm focus:border-indigo-500 outline-none disabled:opacity-50"
+                    disabled={isUploading}
+                  >
+                    <option value="" disabled>
+                      Select a Folder...
+                    </option>
+                    {folders.map((f: any) => (
+                      <option key={f.id} value={f.id}>
+                        {f.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => setIsCreatingFolder(true)}
+                    disabled={isUploading}
+                    className="bg-zinc-800 hover:bg-zinc-700 text-white px-3 rounded-lg text-xs font-bold flex items-center gap-1 disabled:opacity-50"
+                  >
+                    <Plus size={14} /> New
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="New Folder Name..."
+                    value={newFolderName}
+                    onChange={(e) => setNewFolderName(e.target.value)}
+                    className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white text-sm focus:border-indigo-500 outline-none"
+                    autoFocus
+                  />
+                  <button
+                    onClick={handleCreateFolder}
+                    className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 rounded-lg text-xs font-bold"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={() => setIsCreatingFolder(false)}
+                    className="text-zinc-500 px-2 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
             </div>
 
             <TagSelector
@@ -337,7 +388,6 @@ export default function UploadModal({
             />
           </div>
 
-          {/* ERROR MESSAGE */}
           {message && message.type === "error" && (
             <div className="p-3 rounded-lg flex items-center gap-2 text-sm bg-red-500/10 text-red-400 border border-red-500/20">
               <AlertCircle size={16} />
@@ -345,7 +395,6 @@ export default function UploadModal({
             </div>
           )}
 
-          {/* UPLOAD BUTTON OR PROGRESS BAR */}
           {isUploading ? (
             <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-4">
               <div className="flex justify-between items-center mb-2">
@@ -356,9 +405,7 @@ export default function UploadModal({
                   {uploadProgress}%
                 </span>
               </div>
-              {/* Progress Track */}
               <div className="h-2 w-full bg-zinc-800 rounded-full overflow-hidden">
-                {/* Progress Fill */}
                 <div
                   className="h-full bg-indigo-600 transition-all duration-300 ease-out"
                   style={{ width: `${uploadProgress}%` }}
