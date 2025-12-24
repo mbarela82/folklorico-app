@@ -62,6 +62,8 @@ security = HTTPBearer()
 # 5. Setup CORS
 origins = [
     "http://localhost:3000",
+    "https://www.sarape.app",
+    "https://sarape.app",
     "https://folklorico-app.vercel.app",
     "*"
 ]
